@@ -66,8 +66,18 @@ def choose_tool(user_input):
     ]):
         return "weather"
 
+
     # ========================================================
     # DEFAULT
     # ========================================================
+     
+    if any(word in text for word in [
+        "tell me about",
+        "information about",
+        "details about",
+        "height",
+        "duration"
+    ]):
+        return "trek_info"
 
     return "chat"

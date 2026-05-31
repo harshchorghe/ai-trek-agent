@@ -1,6 +1,8 @@
 from langchain_ollama import OllamaLLM
 from collections import deque
 
+from tools.trek_detector import detect_trek
+from tools.trek_info import format_trek_info
 
 from tools.planner import create_trek_plan
 
@@ -87,7 +89,6 @@ while True:
     tool = choose_tool(user_input)
 
     print(f"\n[Selected Tool: {tool}]\n")
-
     # ========================================================
     # TOOL 1 : PACKING LIST
     # ========================================================
@@ -105,7 +106,12 @@ while True:
 
     elif tool == "difficulty":
 
-        trek_name = input("Enter Trek Name: ").strip()
+        trek_name = detect_trek(user_input)
+
+        if not trek_name:
+            trek_name = input(
+                "Enter Trek Name: "
+            ).strip()
 
         print(
             "\nAI:",
@@ -137,27 +143,97 @@ while True:
 
     elif tool == "weather":
 
-        location = input("Enter Trek Location: ").strip()
+        trek_name = detect_trek(user_input)
+
+        if not trek_name:
+            trek_name = input(
+                "Enter Trek Location: "
+            ).strip()
 
         print(
             "\nAI:",
-            get_weather(location)
+            get_weather(trek_name)
         )
 
         print()
 
         continue
 
-    # TOOL : TREK PLANNER
+    # ========================================================
+    # TOOL 5 : TREK PLANNER
+    # ========================================================
 
     elif tool == "planner":
-        location = input("Enter Trek Location: ").strip()
+
+        trek_name = detect_trek(user_input)
+
+        if not trek_name:
+            trek_name = input(
+                "Enter Trek Location: "
+            ).strip()
+
+        print(
+            f"\nDetected Trek: {trek_name}"
+        )
+
         print(
             "\nAI:",
-            create_trek_plan(location)
+            create_trek_plan(trek_name)
         )
+
         print()
+
         continue
+
+    # ========================================================
+    # TOOL 6 : TREK INFORMATION
+    # ========================================================
+
+    elif tool == "trek_info":
+
+        trek_name = detect_trek(user_input)
+
+        if trek_name:
+
+            print(
+                "\nAI:",
+                format_trek_info(trek_name)
+            )
+
+        else:
+
+            print(
+                "\nAI: Trek not found in database."
+            )
+
+        print()
+
+        continue
+ # ========================================================
+# TOOL : TREK INFORMATION
+# ========================================================
+
+    elif tool == "trek_info":
+
+        trek_name = detect_trek(user_input)
+
+    if trek_name:
+
+        print(
+            "\nAI:",
+            format_trek_info(trek_name)
+        )
+
+    else:
+
+        print(
+            "\nAI: Trek not found in database."
+        )
+
+    print()
+
+    continue
+
 
     # ========================================================
      

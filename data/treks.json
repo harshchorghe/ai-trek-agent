@@ -1,0 +1,19 @@
+{
+  "kalsubai": {
+    "difficulty": "Moderate",
+    "duration": "4-5 hours",
+    "height": "5400 ft"
+  },
+
+  "rajmachi": {
+    "difficulty": "Easy",
+    "duration": "3-4 hours",
+    "height": "2710 ft"
+  },
+
+  "harihar": {
+    "difficulty": "Hard",
+    "duration": "3 hours",
+    "height": "3676 ft"
+  }
+}
