@@ -1,6 +1,8 @@
 from langchain_ollama import OllamaLLM
 from collections import deque
 
+from tools.location_extractor import extract_location
+
 # ============================================================
 # TREK TOOLS
 # ============================================================
@@ -117,13 +119,12 @@ while True:
 
     elif tool == "difficulty":
 
-        trek_name = detect_trek(user_input)
+        trek_name = extract_location(
+            user_input,
+            llm
+        )
 
-        if not trek_name:
-
-            trek_name = input(
-                "Enter Trek Name: "
-            ).strip()
+        print(f"\nDetected Trek: {trek_name}")
 
         print(
             "\nAI:",
@@ -140,6 +141,11 @@ while True:
 
     elif tool == "itinerary":
 
+        trek_name = extract_location(
+            user_input,
+            llm
+        )
+
         print(
             "\nAI:",
             generate_itinerary()
@@ -155,28 +161,12 @@ while True:
 
     elif tool == "weather":
 
-        location = user_input
+        location = extract_location(
+            user_input,
+            llm
+        )
 
-        for phrase in [
-            "what is the weather at",
-            "what is the weather in",
-            "weather at",
-            "weather in",
-            "weather"
-        ]:
-
-            location = location.lower().replace(
-                phrase,
-                ""
-            )
-
-        location = location.strip()
-
-        if not location:
-
-            location = input(
-                "Enter Trek Location: "
-            ).strip()
+        print(f"\nDetected Location: {location}")
 
         print(
             "\nAI:",
@@ -193,61 +183,42 @@ while True:
 
     elif tool == "planner":
 
-        trek_name = user_input
-
-        for phrase in [
-            "plan a trek to",
-            "plan trek to",
-            "trek plan for",
-            "plan a trek",
-            "trek plan"
-        ]:
-
-            trek_name = trek_name.lower().replace(
-                phrase,
-                ""
-            )
-
-        trek_name = trek_name.strip()
-
-        if not trek_name:
-
-            trek_name = input(
-                "Enter Trek Location: "
-            ).strip()
-
-        print(
-            f"\nDetected Trek: {trek_name}"
+        trek_name = extract_location(
+            user_input,
+            llm
         )
+
+        print(f"\nDetected Trek: {trek_name}")
 
         print(
             "\nAI:",
-            create_trek_plan(trek_name)
+            create_trek_plan(
+                trek_name,
+                llm
+            )
         )
 
         print()
 
         continue
+
     # ========================================================
     # TOOL 6 : TREK INFORMATION
     # ========================================================
 
     elif tool == "trek_info":
 
-        trek_name = detect_trek(user_input)
+        trek_name = extract_location(
+            user_input,
+            llm
+        )
 
-        if trek_name:
+        print(f"\nDetected Trek: {trek_name}")
 
-            print(
-                "\nAI:",
-                format_trek_info(trek_name)
-            )
-
-        else:
-
-            print(
-                "\nAI: Trek not found in database."
-            )
+        print(
+            "\nAI:",
+            format_trek_info(trek_name)
+        )
 
         print()
 
