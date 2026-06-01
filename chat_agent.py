@@ -1,13 +1,16 @@
 from langchain_ollama import OllamaLLM
 from collections import deque
 
+# ============================================================
+# TREK TOOLS
+# ============================================================
+
 from tools.trek_detector import detect_trek
 from tools.trek_info import format_trek_info
-
 from tools.planner import create_trek_plan
 
 # ============================================================
-# TOOLS
+# OTHER TOOLS
 # ============================================================
 
 from tools.packing import get_packing_list
@@ -44,18 +47,22 @@ llm = OllamaLLM(
 
 conversation = deque(maxlen=12)
 
-# Load previous chat history
 try:
+
     with open(MEMORY_FILE, "r", encoding="utf-8") as file:
 
         lines = file.readlines()
 
         for line in lines[-12:]:
-            conversation.append(line.strip())
+
+            conversation.append(
+                line.strip()
+            )
 
     print("✅ Previous memory loaded")
 
 except FileNotFoundError:
+
     print("⚠️ No previous memory found")
 
 # ============================================================
@@ -66,19 +73,18 @@ print("\n🥾 AI Trek Planner")
 print("Type 'exit' to quit\n")
 
 # ============================================================
-# MAIN CHAT LOOP
+# MAIN LOOP
 # ============================================================
 
 while True:
 
     user_input = input("You: ").strip()
 
-    # Exit application
     if user_input.lower() == "exit":
+
         print("\n👋 Goodbye!")
         break
 
-    # Ignore empty input
     if not user_input:
         continue
 
@@ -89,19 +95,24 @@ while True:
     tool = choose_tool(user_input)
 
     print(f"\n[Selected Tool: {tool}]\n")
+
     # ========================================================
     # TOOL 1 : PACKING LIST
     # ========================================================
 
     if tool == "packing":
 
-        print("\nAI:", get_packing_list())
+        print(
+            "\nAI:",
+            get_packing_list()
+        )
+
         print()
 
         continue
 
     # ========================================================
-    # TOOL 2 : TREK DIFFICULTY
+    # TOOL 2 : DIFFICULTY
     # ========================================================
 
     elif tool == "difficulty":
@@ -109,6 +120,7 @@ while True:
         trek_name = detect_trek(user_input)
 
         if not trek_name:
+
             trek_name = input(
                 "Enter Trek Name: "
             ).strip()
@@ -123,7 +135,7 @@ while True:
         continue
 
     # ========================================================
-    # TOOL 3 : ITINERARY GENERATOR
+    # TOOL 3 : ITINERARY
     # ========================================================
 
     elif tool == "itinerary":
@@ -138,21 +150,37 @@ while True:
         continue
 
     # ========================================================
-    # TOOL 4 : WEATHER INFORMATION
+    # TOOL 4 : WEATHER
     # ========================================================
 
     elif tool == "weather":
 
-        trek_name = detect_trek(user_input)
+        location = user_input
 
-        if not trek_name:
-            trek_name = input(
+        for phrase in [
+            "what is the weather at",
+            "what is the weather in",
+            "weather at",
+            "weather in",
+            "weather"
+        ]:
+
+            location = location.lower().replace(
+                phrase,
+                ""
+            )
+
+        location = location.strip()
+
+        if not location:
+
+            location = input(
                 "Enter Trek Location: "
             ).strip()
 
         print(
             "\nAI:",
-            get_weather(trek_name)
+            get_weather(location)
         )
 
         print()
@@ -165,9 +193,25 @@ while True:
 
     elif tool == "planner":
 
-        trek_name = detect_trek(user_input)
+        trek_name = user_input
+
+        for phrase in [
+            "plan a trek to",
+            "plan trek to",
+            "trek plan for",
+            "plan a trek",
+            "trek plan"
+        ]:
+
+            trek_name = trek_name.lower().replace(
+                phrase,
+                ""
+            )
+
+        trek_name = trek_name.strip()
 
         if not trek_name:
+
             trek_name = input(
                 "Enter Trek Location: "
             ).strip()
@@ -184,7 +228,6 @@ while True:
         print()
 
         continue
-
     # ========================================================
     # TOOL 6 : TREK INFORMATION
     # ========================================================
@@ -209,35 +252,8 @@ while True:
         print()
 
         continue
- # ========================================================
-# TOOL : TREK INFORMATION
-# ========================================================
-
-    elif tool == "trek_info":
-
-        trek_name = detect_trek(user_input)
-
-    if trek_name:
-
-        print(
-            "\nAI:",
-            format_trek_info(trek_name)
-        )
-
-    else:
-
-        print(
-            "\nAI: Trek not found in database."
-        )
-
-    print()
-
-    continue
-
 
     # ========================================================
-     
-
     # NORMAL AI CHAT
     # ========================================================
 
@@ -245,9 +261,15 @@ while True:
 
     conversation.append(user_message)
 
-    # Save user message
-    with open(MEMORY_FILE, "a", encoding="utf-8") as file:
-        file.write(user_message + "\n")
+    with open(
+        MEMORY_FILE,
+        "a",
+        encoding="utf-8"
+    ) as file:
+
+        file.write(
+            user_message + "\n"
+        )
 
     prompt = """
 You are TrekGPT, an expert trekking guide from Maharashtra.
@@ -274,6 +296,12 @@ Give practical and concise answers.
 
     conversation.append(ai_message)
 
-    # Save AI response
-    with open(MEMORY_FILE, "a", encoding="utf-8") as file:
-        file.write(ai_message + "\n")
+    with open(
+        MEMORY_FILE,
+        "a",
+        encoding="utf-8"
+    ) as file:
+
+        file.write(
+            ai_message + "\n"
+        )

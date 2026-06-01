@@ -1,7 +1,5 @@
-from tools.trek_info import format_trek_info
+from tools.geocoder import get_coordinates
 
-print(
-    format_trek_info(
-        "kalsubai"
-    )
-)
+print(get_coordinates("Harishchandragad"))
+print(get_coordinates("Ratangad"))
+print(get_coordinates("Kalsubai"))
