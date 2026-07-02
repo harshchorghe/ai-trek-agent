@@ -99,6 +99,16 @@ export const DESTINATIONS: Destination[] = [
     summary: "A scenic hill station in the Western Ghats range, known for its strawberry farms, valleys, and colonial style.",
     bestFor: "Couples, family outings, and strawberry picking.",
     highlights: ["Arthur's Seat", "Venna Lake", "Mapro Garden", "Elephant's Head Point"]
+  },
+  {
+    slug: "ujjain",
+    name: "Ujjain",
+    type: "historical",
+    minBudget: 3500,
+    duration: "2-3 days",
+    summary: "An ancient city situated on the banks of the Shipra River, famous for the Mahakaleshwar Jyotirlinga temple and the Kumbh Mela.",
+    bestFor: "Spiritual travelers, family pilgrimage groups, and history/archeology enthusiasts.",
+    highlights: ["Mahakaleshwar Temple", "Kal Bhairav Temple", "Ram Ghat Aarti", "Sandipani Ashram"]
   }
 ];
 

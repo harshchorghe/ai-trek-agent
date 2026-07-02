@@ -30,6 +30,11 @@ RESTAURANTS_DB = {
         "Cafes": ["Pizza By The Bay (Marine Drive)", "Mockingbird Cafe Bar (Churchgate)", "Kyani & Co. (Marine Lines) - Parsi Cafe"],
         "Restaurants": ["Gaylord (Churchgate) - Continental & Indian heritage", "Khyber (Kala Ghoda) - North Indian royal theme", "Leopold Cafe (Colaba)"],
         "Street Food": ["Pav Bhaji at Sardar / Chowpatty", "Bhel Puri at Girgaon Chowpatty", "Vada Pav at Ashok Vada Pav (Dadari)"]
+    },
+    "ujjain": {
+        "Cafes": ["Mahakal Coffee House", "Café 147 style outlets", "Koyla Shakes & Cafe"],
+        "Restaurants": ["Guru Kripa Ghantawala (Traditional veg meals)", "Apna Sweets (Multi-cuisine)", "Bhartiya Bhojanalaya (Daal Bafla thali)"],
+        "Street Food": ["Indori Poha & Jalebi at Tower Chowk", "Garadu (spicy fried yam) stalls", "Sabudana Khichdi & Rabdi"]
     }
 }
 
@@ -51,9 +56,16 @@ def get_restaurant_recommendations(destination: str, llm: Optional[Any] = None) 
         restaurants = [f"Traditional Fine-Diner in {destination.title()}", f"Scenic Riverside/Hillside Restaurant in {destination.title()}"]
         street_food = [f"Local traditional street stalls in {destination.title()}", f"Famous sweet & snack outlets in {destination.title()}"]
 
+    from tools.db import get_cached_item, save_cached_item
+    cache_key = f"{dest_key}"
+    cached = get_cached_item("restaurants", cache_key)
+    if cached:
+        return cached
+
     if llm:
         try:
-            prompt = f"""You are an experienced food critic and travel guide for Explorush.
+            if dest_key in RESTAURANTS_DB:
+                prompt = f"""You are an experienced food critic and travel guide for Explorush.
 Write a rich, appetising recommendation for a user asking about where to eat in {destination}.
 Highlight these spots from our database:
 - Cafes: {', '.join(cafes)}
@@ -62,7 +74,15 @@ Highlight these spots from our database:
 
 Write a friendly, enthusiastic, and conversational response. Keep it concise but mouth-watering!
 """
-            return llm.invoke(prompt)
+            else:
+                prompt = f"""You are an experienced food critic and travel guide for Explorush.
+Recommend 3 actual, popular local eateries (including cafes, traditional restaurants, and street food areas) for a user visiting {destination}.
+Make sure these are real-world, famous food spots in {destination}. Write a brief, appetizing description for each. Keep it concise.
+"""
+            res = llm.invoke(prompt)
+            if res:
+                save_cached_item("restaurants", cache_key, res)
+                return res
         except Exception:
             pass
 

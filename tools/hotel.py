@@ -45,8 +45,19 @@ HOTELS_DB = {
         "Budget": ["Zostel Alibaug", "Outpost Alibaug (Standard)", "Local homestays at Kashid"],
         "Mid-range": ["Radisson Blu Resort & Spa Alibaug", "Tropicana Resort", "Sai Inn Resort"],
         "Luxury": ["The Mansion House", "Radisson Blu (Suites)", "U Tropicana Alibaug (Premium Villa)"]
+    },
+    "ujjain": {
+        "Budget": ["MPT Shipra Residency (Dormitory)", "Mahakal Dharamshala", "Hotel Avanti clean rooms"],
+        "Mid-range": ["MPT Shipra Residency", "Hotel Abika Elite", "Hotel Imperial"],
+        "Luxury": ["Radisson Hotel Ujjain", "Hotel Anjushree", "Solitaire Hotel & Resort"]
+    },
+    "rishikesh": {
+        "Budget": ["Zostel Rishikesh", "The Hostel Crowd (Tapovan)", "Madpackers Rishikesh"],
+        "Mid-range": ["Aloha on the Ganges (Standard Rooms)", "Hotel Deep Palace", "Hotel Ganga Kinare"],
+        "Luxury": ["Ananda in the Himalayas (Nearby luxury wellness)", "Taj Rishikesh Resort & Spa", "Aloha on the Ganges (Suites)"]
     }
 }
+
 
 def get_hotel_recommendations(destination: str, style: str = "Mid-range", llm: Optional[Any] = None) -> str:
     dest_key = destination.lower().strip()
@@ -66,17 +77,32 @@ def get_hotel_recommendations(destination: str, style: str = "Mid-range", llm: O
             f"Premium Heritage Resort in {destination.title()}"
         ]
 
+    from tools.db import get_cached_item, save_cached_item
+    cache_key = f"{dest_key}_{style_key.lower()}"
+    cached = get_cached_item("hotels", cache_key)
+    if cached:
+        return cached
+
     # Format output
     if llm:
         try:
-            hotels_list = ", ".join(hotels)
-            prompt = f"""You are a luxury travel concierge for Explorush.
+            if dest_key in HOTELS_DB:
+                hotels_list = ", ".join(HOTELS_DB[dest_key].get(style_key, []))
+                prompt = f"""You are a luxury travel concierge for Explorush.
 Recommend accommodation options for a user traveling to {destination} with a "{style_key}" travel style.
 Here are the recommendations from our database: {hotels_list}.
 
 Write a brief, attractive, and helpful summary of these recommendations and why they are great fits. Keep it concise.
 """
-            return llm.invoke(prompt)
+            else:
+                prompt = f"""You are a luxury travel concierge for Explorush.
+Recommend 3 actual, real-world accommodation options (with names, budget range, and brief descriptions) for a user traveling to {destination} with a "{style_key}" travel style.
+Make sure the hotels are realistic, popular, and match the budget class of "{style_key}". Keep it clean and concise.
+"""
+            res = llm.invoke(prompt)
+            if res:
+                save_cached_item("hotels", cache_key, res)
+                return res
         except Exception:
             pass
 

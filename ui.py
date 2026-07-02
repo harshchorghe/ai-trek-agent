@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from typing import Optional, Any
-from langchain_ollama import OllamaLLM
+from tools.llm import GroqLLM
 
 # Import tools
 from tools.conversation import (
@@ -49,15 +49,10 @@ st.markdown("Your smart travel companion for planning, packing, budget estimatio
 @st.cache_resource
 def load_model():
     try:
-        model = OllamaLLM(
-            model="phi3",
-            temperature=0.2,
-            num_predict=180,
-            keep_alive="30m",
-        )
-        # Probe
-        model.invoke("Hi")
-        return model, True
+        model = GroqLLM(model="llama-3.1-70b-versatile", temperature=0.2)
+        if model.api_key:
+            return model, True
+        return None, False
     except Exception:
         return None, False
 

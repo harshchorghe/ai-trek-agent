@@ -25,6 +25,11 @@ NEARBY_DB = {
         "Attractions": ["Arthur's Seat (Queen of Points)", "Venna Lake boating", "Mapro Garden"],
         "Hidden Gems": ["Kate's Point / Elephant's Head Point at sunrise", "Dhobi Waterfall", "Tapola (mini Kashmir of Maharashtra)"],
         "Photography Spots": ["Lingmala Waterfall cascades", "Elphinstone Point valleys", "Strawberry fields during harvest season"]
+    },
+    "ujjain": {
+        "Attractions": ["Mahakaleshwar Jyotirlinga Temple (famed Bhasma Aarti)", "Harsiddhi Temple (Shaktipeeth)", "Kal Bhairav Temple (alcohol offering ritual)"],
+        "Hidden Gems": ["Sandipani Ashram (where Lord Krishna studied)", "Ved Shala (Jantar Mantar observatory)", "Mangalnath Temple (birthplace of Mars)"],
+        "Photography Spots": ["Evening Shipra River Aarti at Ram Ghat", "Stunning architecture of Mahakal corridor", "Scenic views of Shipra river from Kaliadeh Palace"]
     }
 }
 
@@ -46,9 +51,16 @@ def get_nearby_attractions(destination: str, llm: Optional[Any] = None) -> str:
         hidden_gems = [f"Secret local nature trail in {destination.title()}", f"Scenic viewpoint away from crowds in {destination.title()}"]
         photo_spots = [f"Scenic overlook during sunset in {destination.title()}", f"Local colorful architecture in {destination.title()}"]
 
+    from tools.db import get_cached_item, save_cached_item
+    cache_key = f"{dest_key}"
+    cached = get_cached_item("nearby", cache_key)
+    if cached:
+        return cached
+
     if llm:
         try:
-            prompt = f"""You are a local tour guide and photographer for Explorush.
+            if dest_key in NEARBY_DB:
+                prompt = f"""You are a local tour guide and photographer for Explorush.
 Recommend top sights, hidden gems, and photography spots for a user visiting {destination}.
 Use these database points:
 - Attractions: {', '.join(attractions)}
@@ -57,7 +69,18 @@ Use these database points:
 
 Write a friendly, inspiring, and professional travel guide. Keep it concise.
 """
-            return llm.invoke(prompt)
+            else:
+                prompt = f"""You are a local tour guide and photographer for Explorush.
+Recommend sightseeing spots for a user visiting {destination}. Provide:
+1) 2-3 real major tourist attractions with name and description.
+2) 1-2 offbeat hidden gems.
+3) 1-2 scenic spots perfect for taking photos.
+Keep it realistic, highly detailed, and concise.
+"""
+            res = llm.invoke(prompt)
+            if res:
+                save_cached_item("nearby", cache_key, res)
+                return res
         except Exception:
             pass
 

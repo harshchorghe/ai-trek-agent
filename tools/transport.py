@@ -24,6 +24,12 @@ TRANSPORT_DB = {
         "Trains": "Lonavala Railway Station (LNL). Local trains run regularly from Pune, and express trains connect from Mumbai (e.g., Deccan Queen, Sinhagad Express).",
         "Road Trips": "Drive via the Mumbai-Pune Expressway (approx. 2 hours from Mumbai, 1 hour from Pune). Two-wheelers must use the old NH4 highway.",
         "Public Transport": "Local auto-rickshaws, tourist taxis, or walking. Renting scooters is also popular."
+    },
+    "ujjain": {
+        "Flights": "Devi Ahilyabai Holkar Airport in Indore (IDR), 55 km away. Taxi transfers or local buses take about 1 hour to reach Ujjain from Indore.",
+        "Trains": "Ujjain Junction (UJN) is a major A-category railway station directly connected to Delhi, Mumbai, Chennai, and Kolkata. Avantika Express, Malwa Express are popular choices.",
+        "Road Trips": "Indore-Ujjain road is a smooth 4-lane highway (NH52, approx 1-1.5 hours drive). Easily accessible from Indore, Bhopal, and Ahmedabad.",
+        "Public Transport": "Shared auto-rickshaws, e-rickshaws, and municipal city buses are cheap and widely available. Walking is great for central temple lanes."
     }
 }
 
@@ -48,9 +54,16 @@ def get_transportation_guidance(destination: str, llm: Optional[Any] = None) -> 
         road_trip = f"Plan a road trip via major National Highways routing to {destination.title()}."
         public_transport = "Renting a local vehicle, auto-rickshaws, or using state-run bus transport is recommended."
 
+    from tools.db import get_cached_item, save_cached_item
+    cache_key = f"{dest_key}"
+    cached = get_cached_item("transport", cache_key)
+    if cached:
+        return cached
+
     if llm:
         try:
-            prompt = f"""You are a logistics and transport coordinator for Explorush.
+            if dest_key in TRANSPORT_DB:
+                prompt = f"""You are a logistics and transport coordinator for Explorush.
 Write a clear, structured transportation guide for a user traveling to {destination}.
 Integrate these guidelines:
 - Flights: {flights}
@@ -60,7 +73,20 @@ Integrate these guidelines:
 
 Write a professional, friendly, and practical response. Keep it concise.
 """
-            return llm.invoke(prompt)
+            else:
+                prompt = f"""You are a logistics and transport coordinator for Explorush.
+Write a clear, structured transportation guide for a user traveling to {destination}.
+Provide real-world, practical logistics advice on:
+1) Nearest airport and typical transfer details.
+2) Major nearby railway station.
+3) Best highway routes or bus connections.
+4) Best local commute options (rentals, autos, etc.).
+Keep it realistic and concise.
+"""
+            res = llm.invoke(prompt)
+            if res:
+                save_cached_item("transport", cache_key, res)
+                return res
         except Exception:
             pass
 

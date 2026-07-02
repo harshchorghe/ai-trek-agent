@@ -18,6 +18,12 @@ ITINERARIES_DB = {
         "**Day 2: Leh to Nubra Valley via Khardung La**\n  - Morning: Drive to Nubra Valley over Khardung La Pass (17,582 ft - highest motorable road).\n  - Afternoon: Arrive Hunder, enjoy double-humped camel safari in cold sand dunes.\n  - Evening: Visit Diskit Monastery & see the giant Buddha statue.\n  - Night: Camping in Hunder.",
         "**Day 3: Nubra to Pangong Tso via Shyok Route**\n  - Morning: Drive along Shyok River route to Pangong Lake (14,270 ft).\n  - Afternoon: Watch the lake change colors (blue, green, turquoise).\n  - Evening: Photography walk by the lake.\n  - Night: Stay in lakeside cottages/homestay.",
         "**Day 4: Pangong Tso to Leh via Chang La**\n  - Morning: Drive back to Leh over Chang La Pass (17,586 ft).\n  - Afternoon: Stop at Thiksey Monastery for pictures.\n  - Evening: Last-minute souvenir shopping in Leh.\n  - Night: Farewell dinner."
+    ],
+    "ujjain": [
+        "**Day 1: Arrival & Evening Shipra River Aarti**\n  - Morning: Arrive in Ujjain Junction, check-in to your hotel.\n  - Afternoon: Take rest, have lunch at Guru Kripa (Daal Bafla).\n  - Evening: Visit Ram Ghat for the grand Shipra River sunset Aarti.\n  - Night: Visit local markets and sample Tower Chowk Poha-Jalebi.",
+        "**Day 2: Mahakaleshwar & Local Temples**\n  - Morning: Pre-book and attend the famous Bhasma Aarti at Mahakaleshwar Jyotirlinga.\n  - Afternoon: Explore the grand Mahakal Corridor and Harsiddhi Shaktipeeth Temple.\n  - Evening: Visit Kal Bhairav Temple (famous for the liquor offering ritual).\n  - Night: Relax at hotel or standard restaurant dinner.",
+        "**Day 3: Historical Exploration & Ashram**\n  - Morning: Visit Sandipani Ashram (where Lord Krishna studied) and Sandipani temple.\n  - Afternoon: Head to Jantar Mantar (Ved Shala observatory) and Mangalnath Temple.\n  - Evening: Walk around Kaliadeh Palace on the outskirts of the city.\n  - Night: Dinner at Apna Sweets.",
+        "**Day 4: Day Trip to Omkareshwar / Departure**\n  - Morning: Plan a quick morning road trip to Omkareshwar Jyotirlinga (140 km, optional) or explore local handloom fabrics (Bhairavgarh block prints).\n  - Afternoon: Pack bags, shop for local sweets/crafts.\n  - Evening: Head to Ujjain Junction or Indore airport for return journey."
     ]
 }
 
@@ -32,6 +38,8 @@ def generate_itinerary(destination: str = "", days: int = 3, llm: Optional[Any] 
         matched_key = "manali"
     elif "ladakh" in dest_key:
         matched_key = "ladakh"
+    elif "ujjain" in dest_key:
+        matched_key = "ujjain"
         
     itinerary_days = []
     

@@ -3,7 +3,7 @@ import { ChatConsole } from "../components/trek-dashboard";
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-6">
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-6xl">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xl font-bold tracking-tight text-white">Explorush AI</span>

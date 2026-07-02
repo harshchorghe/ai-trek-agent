@@ -1,3 +1,4 @@
+import { MongoClient } from "mongodb";
 import { TREKS, DESTINATIONS, type Trek, type Destination } from "@/lib/treks";
 
 export type ChatRole = "user" | "assistant";
@@ -36,7 +37,72 @@ export type AgentResponse = {
   suggestions: string[];
 };
 
-const MODEL = process.env.OLLAMA_MODEL ?? "phi3";
+// Read env vars dynamically in functions
+
+// ============================================================
+// MONGODB CACHING HELPERS
+// ============================================================
+async function getCachedPlanFromMongo(
+  destination: string,
+  duration: number,
+  travellers: number,
+  style: string
+): Promise<string | null> {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) return null;
+  try {
+    const client = await MongoClient.connect(uri, { serverSelectionTimeoutMS: 3000 });
+    const db = client.db("explorush_db");
+    const plan = await db.collection("plans").findOne({
+      destination: destination.toLowerCase().trim(),
+      duration,
+      travellers,
+      style: style.toLowerCase().trim(),
+    });
+    await client.close();
+    return plan ? (plan.plan_text || null) : null;
+  } catch (e) {
+    console.error("Next.js: MongoDB fetch failed", e);
+    return null;
+  }
+}
+
+async function savePlanToMongo(
+  destination: string,
+  duration: number,
+  travellers: number,
+  style: string,
+  planText: string
+): Promise<void> {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) return;
+  try {
+    const client = await MongoClient.connect(uri, { serverSelectionTimeoutMS: 3000 });
+    const db = client.db("explorush_db");
+    await db.collection("plans").updateOne(
+      {
+        destination: destination.toLowerCase().trim(),
+        duration,
+        travellers,
+        style: style.toLowerCase().trim(),
+      },
+      {
+        $set: {
+          destination: destination.toLowerCase().trim(),
+          duration,
+          travellers,
+          style: style.toLowerCase().trim(),
+          plan_text: planText,
+          updated_at: Date.now(),
+        },
+      },
+      { upsert: true }
+    );
+    await client.close();
+  } catch (e) {
+    console.error("Next.js: MongoDB save failed", e);
+  }
+}
 
 function normalize(text: string) {
   return text.trim().toLowerCase();
@@ -257,12 +323,12 @@ function buildLocalReply(
     return [
       `💰 **Estimated Budget Plan for ${name} (3 Days · Mid-range Style)**`,
       "",
-      `- 🏨 **Accommodation**: ₹7,500 (Hotel room for 3 nights)`,
-      `- 🚗 **Transport**: ₹3,600 (Local rental cab/scooter)`,
-      `- 🍽️ **Food & Drinks**: ₹3,600 (Daily casual cafes)`,
-      `- 🎡 **Activities**: ₹2,400 (Entry tickets & tours)`,
-      `- 🛡️ **Emergency Buffer**: ₹1,800 (10% contingency)`,
-      `- 💵 **Total Estimate**: **₹18,900** per person.`,
+      "- 🏨 **Accommodation**: ₹7,500 (Hotel room for 3 nights)",
+      "- 🚗 **Transport**: ₹3,600 (Local rental cab/scooter)",
+      "- 🍽️ **Food & Drinks**: ₹3,600 (Daily casual cafes)",
+      "- 🎡 **Activities**: ₹2,400 (Entry tickets & tours)",
+      "- 🛡️ **Emergency Buffer**: ₹1,800 (10% contingency)",
+      "- 💵 **Total Estimate**: **₹18,900** per person.",
       "",
       "💡 *Tip*: Travel off-season (Monsoon in Goa, or spring in Manali) to get hotel discounts up to 40%!"
     ].join("\n");
@@ -441,37 +507,35 @@ function buildLocalReply(
   return input;
 }
 
-async function askOllama(messages: ChatMessage[]) {
+async function askGroq(messages: ChatMessage[]): Promise<string | null> {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return null;
+  
   const conversation = messages
     .slice(-8)
-    .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${message.content}`)
-    .join("\n");
-
-  const prompt = `
-You are an experienced, friendly, and professional travel consultant for Explorush.
-Answer the user request naturally and helpfully. Keep the answer practical and concise.
-Use short paragraphs or bullets.
-
-Conversation:
-${conversation}
-
-Assistant:
-`.trim();
+    .map((message) => ({
+      role: message.role === "user" ? "user" : "assistant",
+      content: message.content
+    }));
 
   try {
-    const response = await fetch("http://127.0.0.1:11434/api/generate", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${key}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: MODEL,
-        prompt,
-        stream: false,
-        options: {
-          temperature: 0.2,
-          num_predict: 220,
-        },
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: "You are an experienced, friendly, and professional travel consultant for Explorush. Answer the user request naturally and helpfully. Keep the answer practical and concise. Use short paragraphs or bullets."
+          },
+          ...conversation
+        ],
+        temperature: 0.2,
+        max_tokens: 1024
       }),
     });
 
@@ -479,9 +543,10 @@ Assistant:
       return null;
     }
 
-    const data = (await response.json()) as { response?: string };
-    return data.response?.trim() || null;
-  } catch {
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error("Next.js: Groq API call failed", e);
     return null;
   }
 }
@@ -517,12 +582,69 @@ export async function buildAgentResponse(messages: ChatMessage[]): Promise<Agent
     }
   }
 
-  if (tool === "chat") {
-    const ollamaReply = await askOllama(messages);
-
-    if (ollamaReply) {
+  // Intercept the planner tool to check the MongoDB cloud cache
+  if (tool === "planner") {
+    const name = activeMatch?.name ?? "Goa";
+    // Default mock parameters on Node side for demo caching
+    const cachedPlan = await getCachedPlanFromMongo(name, 3, 1, "mid-range");
+    if (cachedPlan) {
       return {
-        reply: ollamaReply,
+        reply: cachedPlan,
+        tool,
+        trekName: activeMatch?.name ?? null,
+        source: "local",
+        facts: factsForMatch(activeMatch),
+        suggestions: quickReplies(tool, activeMatch),
+      };
+    }
+
+    let generatedPlan = "";
+    let isGroq = false;
+    
+    const groqReply = await askGroq([
+      {
+        role: "user",
+        content: `Create a highly detailed, professional travel plan for ${name}. Include:
+1) Daily Itinerary
+2) Estimated Budget Breakdown (as a markdown table)
+3) Accommodation Planned (Budget, Mid-range, Luxury options)
+4) Dining & Local Cuisine
+5) Sightseeing & Hidden Gems
+6) Adventure Activities
+7) Weather Window & Advisory
+8) Packing List
+9) Safety & Emergency Information.
+
+Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakdown' so the UI showcase tabs can extract them.`
+      }
+    ]);
+
+    if (groqReply) {
+      generatedPlan = groqReply;
+      isGroq = true;
+    } else {
+      generatedPlan = buildLocalReply(tool, activeMatch, lastUserMessage.content);
+    }
+    
+    // Save generated plan to MongoDB Atlas
+    await savePlanToMongo(name, 3, 1, "mid-range", generatedPlan);
+
+    return {
+      reply: generatedPlan,
+      tool,
+      trekName: activeMatch?.name ?? null,
+      source: isGroq ? "ollama" : "local", // "ollama" acts as model-source flag
+      facts: factsForMatch(activeMatch),
+      suggestions: quickReplies(tool, activeMatch),
+    };
+  }
+
+  if (tool === "chat") {
+    const groqReply = await askGroq(messages);
+
+    if (groqReply) {
+      return {
+        reply: groqReply,
         tool,
         trekName: activeMatch?.name ?? null,
         source: "ollama",
@@ -533,7 +655,7 @@ export async function buildAgentResponse(messages: ChatMessage[]): Promise<Agent
 
     return {
       reply: [
-        "I'm ready to help with your travel planning, but the local AI model is currently offline.",
+        "I'm ready to help with your travel planning, but the Groq Cloud API is currently offline.",
         "Try asking for a travel plan, budget breakdown, packing lists, or hotel recommendations to activate my travel tools."
       ].join("\n\n"),
       tool,

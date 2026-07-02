@@ -13,6 +13,7 @@ from tools.travel_tips import get_travel_tips
 from tools.events import get_cultural_events
 from tools.activities import get_adventure_activities
 from tools.trek import detect_trek, format_trek_info
+from tools.db import get_cached_plan, save_plan_to_cache
 
 def create_travel_plan(query: str, llm: Optional[Any] = None) -> str:
     # 1. Extract details from the user prompt
@@ -33,6 +34,11 @@ def create_travel_plan(query: str, llm: Optional[Any] = None) -> str:
             destination = "Goa"  # Fallback destination if none extracted
 
     destination_title = destination.title()
+
+    # CHECK CACHE FIRST BEFORE GENERATING HEAVY PARTS
+    cached_plan = get_cached_plan(destination, duration, travellers, style)
+    if cached_plan:
+        return cached_plan
 
     # 2. Invoke sub-tools to build sections
     weather_info = get_weather(destination)
@@ -114,4 +120,9 @@ def create_travel_plan(query: str, llm: Optional[Any] = None) -> str:
     
     plan.append("Prepared by Explorush AI Travel Consultant. Safe travels! 🎒✈️")
     
-    return "\n".join(plan)
+    plan_text = "\n".join(plan)
+    
+    # SAVE TO CACHE FOR NEXT TIME
+    save_plan_to_cache(destination, duration, travellers, style, plan_text)
+    
+    return plan_text

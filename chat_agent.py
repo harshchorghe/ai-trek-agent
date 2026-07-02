@@ -7,7 +7,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-from langchain_ollama import OllamaLLM
+from tools.llm import GroqLLM
 
 # Import tools
 from tools.conversation import (
@@ -42,25 +42,21 @@ from tools.faq import answer_faq
 # Tool Router
 from tool_router import choose_tool
 
-# ============================================================
-# LLM CONFIGURATION
-# ============================================================
-# We use Ollama with local fallback support.
+# We use Groq Cloud LLM with local fallback support.
 try:
-    llm = OllamaLLM(
-        model="phi3",
-        temperature=0.2,
-        num_predict=180,
-        keep_alive="30m",
-    )
-    # Quick probe to test if Ollama server is up
-    llm.invoke("Hi")
-    ollama_enabled = True
-    print("✅ Ollama (phi3) loaded successfully")
-except Exception:
+    llm = GroqLLM(model="llama-3.1-70b-versatile", temperature=0.2)
+    # Check if Groq API key is present and test connection
+    if llm.api_key:
+        llm_loaded = True
+        print("✅ Groq Cloud LLM (llama-3.1-70b) loaded successfully")
+    else:
+        llm_loaded = False
+        llm = None
+        print("⚠️ Groq API key missing. Running in local deterministic rule engine mode.")
+except Exception as e:
     llm = None
-    ollama_enabled = False
-    print("⚠️ Ollama offline. Falling back to deterministic local rule engines")
+    llm_loaded = False
+    print(f"⚠️ Groq loading failed ({e}). Running in local deterministic rule engine mode.")
 
 # ============================================================
 # APPLICATION START
