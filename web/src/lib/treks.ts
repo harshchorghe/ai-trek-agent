@@ -115,7 +115,6 @@ export const DESTINATIONS: Destination[] = [
 export const QUICK_PROMPTS = [
   "Plan a trip to Goa for 4 days",
   "Recommend places under 10000",
-  "What should I pack for a monsoon road trip?",
   "Is Manali safe in monsoon?",
   "Plan a trek to Kalsubai this weekend",
   "How difficult is Harihar for beginners?"

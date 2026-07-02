@@ -42,65 +42,155 @@ export type AgentResponse = {
 // ============================================================
 // MONGODB CACHING HELPERS
 // ============================================================
-async function getCachedPlanFromMongo(
-  destination: string,
-  duration: number,
-  travellers: number,
-  style: string
+const CACHE_EXPIRY_POLICIES: Record<string, number | null> = {
+  weather: 3600,     // 1 Hour
+  events: 86400,     // 24 Hours
+};
+
+function normalizeDestination(destination: string): string {
+  if (!destination) return "";
+  let text = destination.toLowerCase().trim();
+  text = text.replace(/\b(junction|airport|station|terminal|city|town|village|beach|hills)\b/g, "").trim();
+  text = text.replace(/[\s\-\/]+/g, "_");
+  text = text.replace(/[^a-z0-9_]/g, "");
+  return text.replace(/^_+|_+$/g, "");
+}
+
+let cachedClient: MongoClient | null = null;
+let cachedDb: any = null;
+
+async function connectToDatabase() {
+  if (cachedClient && cachedDb) {
+    return { client: cachedClient, db: cachedDb };
+  }
+
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("No MONGODB_URI found");
+
+  const client = new MongoClient(uri, {
+    serverSelectionTimeoutMS: 5000,
+    maxPoolSize: 10
+  });
+
+  await client.connect();
+  const db = client.db("explorush_db");
+
+  cachedClient = client;
+  cachedDb = db;
+
+  return { client, db };
+}
+
+async function getCachedSectionFromMongo(
+  category: string,
+  destination: string
 ): Promise<string | null> {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
+  
+  const destNorm = normalizeDestination(destination);
+  if (!destNorm) return null;
+  
+  const currentTime = Date.now() / 1000;
+  
   try {
-    const client = await MongoClient.connect(uri, { serverSelectionTimeoutMS: 3000 });
-    const db = client.db("explorush_db");
-    const plan = await db.collection("plans").findOne({
-      destination: destination.toLowerCase().trim(),
-      duration,
-      travellers,
-      style: style.toLowerCase().trim(),
-    });
-    await client.close();
-    return plan ? (plan.plan_text || null) : null;
+    const { db } = await connectToDatabase();
+    
+    // Index creation to guarantee performance
+    await db.collection("destinations").createIndex({ normalizedDestination: 1 }, { unique: true });
+    
+    const doc = await db.collection("destinations").findOne({ normalizedDestination: destNorm });
+    
+    if (doc && doc.sections && doc.sections[category]) {
+      const section = doc.sections[category];
+      const expiry = section.expiry;
+      const updatedAt = section.updatedAt;
+      
+      if (expiry !== null && expiry !== undefined && (currentTime - updatedAt) > expiry) {
+        console.log(`⌛ Next.js Cache Expired: ${category} for ${destNorm} is stale.`);
+        return null;
+      }
+      
+      // Increment hit count asynchronously using pooled connection
+      db.collection("destinations").updateOne(
+        { normalizedDestination: destNorm },
+        {
+          $inc: {
+            totalHits: 1,
+            [`sections.${category}.hitCount`]: 1
+          },
+          $set: {
+            lastAccessed: currentTime,
+            [`sections.${category}.lastAccessed`]: currentTime
+          }
+        }
+      ).catch(() => {});
+      
+      console.log(`🎯 Next.js KB Hit: ${category} for ${destNorm}`);
+      return section.response || null;
+    }
+    return null;
   } catch (e) {
-    console.error("Next.js: MongoDB fetch failed", e);
+    console.error("Next.js: MongoDB KB fetch failed", e);
     return null;
   }
 }
 
-async function savePlanToMongo(
+async function saveSectionToMongo(
+  category: string,
   destination: string,
-  duration: number,
-  travellers: number,
-  style: string,
-  planText: string
+  value: string,
+  source: string = "groq"
 ): Promise<void> {
   const uri = process.env.MONGODB_URI;
-  if (!uri) return;
+  if (!uri || !value) return;
+  
+  const destNorm = normalizeDestination(destination);
+  if (!destNorm) return;
+  
+  const currentTime = Date.now() / 1000;
+  const expiry = CACHE_EXPIRY_POLICIES[category] !== undefined ? CACHE_EXPIRY_POLICIES[category] : null;
+  
+  const sectionDoc = {
+    response: value.trim(),
+    createdAt: currentTime,
+    updatedAt: currentTime,
+    lastAccessed: currentTime,
+    hitCount: 1,
+    source,
+    version: "1.0",
+    expiry
+  };
+  
   try {
-    const client = await MongoClient.connect(uri, { serverSelectionTimeoutMS: 3000 });
-    const db = client.db("explorush_db");
-    await db.collection("plans").updateOne(
-      {
-        destination: destination.toLowerCase().trim(),
-        duration,
-        travellers,
-        style: style.toLowerCase().trim(),
-      },
+    const { db } = await connectToDatabase();
+    
+    await db.collection("destinations").updateOne(
+      { normalizedDestination: destNorm },
       {
         $set: {
-          destination: destination.toLowerCase().trim(),
-          duration,
-          travellers,
-          style: style.toLowerCase().trim(),
-          plan_text: planText,
-          updated_at: Date.now(),
+          destination: destination.trim(),
+          normalizedDestination: destNorm,
+          lastUpdated: currentTime,
+          lastAccessed: currentTime,
+          [`sections.${category}`]: sectionDoc
         },
+        $setOnInsert: {
+          createdAt: currentTime,
+          totalHits: 0
+        }
       },
       { upsert: true }
     );
-    await client.close();
+    
+    await db.collection("destinations").updateOne(
+      { normalizedDestination: destNorm },
+      { $inc: { totalHits: 1 } }
+    );
+    
+    console.log(`💾 Next.js KB Save: Saved ${category} for ${destNorm}`);
   } catch (e) {
-    console.error("Next.js: MongoDB save failed", e);
+    console.error("Next.js: MongoDB KB save failed", e);
   }
 }
 
@@ -274,8 +364,8 @@ function factsForMatch(match: { type: "trek" | "destination"; name: string; deta
   }
 }
 
-function quickReplies(tool: ToolName, match: { type: "trek" | "destination"; name: string; details: any } | null) {
-  const name = match?.name ?? "Goa";
+function quickReplies(tool: ToolName, match: { type: "trek" | "destination"; name: string; details: any } | null, resolvedName: string | null) {
+  const name = match?.name ?? resolvedName ?? "Goa";
   
   if (tool === "packing") {
     return ["What should I pack for trekking?", "Monsoon road trip packing checklist", "Packing gear for cold weather"];
@@ -298,10 +388,9 @@ function quickReplies(tool: ToolName, match: { type: "trek" | "destination"; nam
 
 function buildLocalReply(
   tool: ToolName,
-  match: { type: "trek" | "destination"; name: string; details: any } | null,
+  name: string,
   input: string
 ): string {
-  const name = match?.name ?? "Goa";
   const nameLower = name.toLowerCase();
 
   if (tool === "planner") {
@@ -551,6 +640,34 @@ async function askGroq(messages: ChatMessage[]): Promise<string | null> {
   }
 }
 
+function extractDestinationFromPrompt(input: string): string | null {
+  const normalized = input.toLowerCase().trim();
+  
+  // Prioritize known cities in the prompt text
+  const knownCities = ["goa", "manali", "ladakh", "lonavala", "mahabaleshwar", "ujjain", "tirupati", "jaipur", "rishikesh", "hampi", "alibaug"];
+  for (const city of knownCities) {
+    if (new RegExp(`\\b${city}\\b`, "i").test(normalized)) {
+      return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+    }
+  }
+
+  // Fallback to regex capture after action keywords
+  const match = normalized.match(/(?:trip to|go to|travel to|visit|planning a trip to|planning to|planning trip to)\s+([a-zA-Z\s]+)/i);
+  if (match && match[1]) {
+    const words = match[1].trim().split(/\s+/);
+    const stopWords = ["for", "in", "with", "this", "next", "during", "under", "budget", "of"];
+    const filteredWords: string[] = [];
+    for (const w of words) {
+      if (stopWords.includes(w.toLowerCase())) break;
+      filteredWords.push(w);
+    }
+    if (filteredWords.length > 0) {
+      return filteredWords.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    }
+  }
+  return null;
+}
+
 export async function buildAgentResponse(messages: ChatMessage[]): Promise<AgentResponse> {
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
 
@@ -568,9 +685,12 @@ export async function buildAgentResponse(messages: ChatMessage[]): Promise<Agent
   const tool = detectTool(lastUserMessage.content);
   const match = findTrekOrDestination(lastUserMessage.content);
 
-  // Scan back to find the active destination context from history if none is in the current message
+  const extractedName = extractDestinationFromPrompt(lastUserMessage.content);
+
+  // Scan back to find the active destination context from history ONLY if none is in the current message
   let activeMatch = match;
-  if (!activeMatch) {
+  let historyExtractedName: string | null = null;
+  if (!activeMatch && !extractedName) {
     for (const msg of [...messages].reverse()) {
       if (msg.role === "user") {
         const historyMatch = findTrekOrDestination(msg.content);
@@ -578,36 +698,64 @@ export async function buildAgentResponse(messages: ChatMessage[]): Promise<Agent
           activeMatch = historyMatch;
           break;
         }
+        const historyExt = extractDestinationFromPrompt(msg.content);
+        if (historyExt) {
+          historyExtractedName = historyExt;
+          break;
+        }
       }
     }
   }
 
-  // Intercept the planner tool to check the MongoDB cloud cache
-  if (tool === "planner") {
-    const name = activeMatch?.name ?? "Goa";
-    // Default mock parameters on Node side for demo caching
-    const cachedPlan = await getCachedPlanFromMongo(name, 3, 1, "mid-range");
-    if (cachedPlan) {
+  const name = activeMatch?.name ?? extractedName ?? historyExtractedName ?? null;
+
+  if (!name && tool !== "chat") {
+    return {
+      reply: "Please specify a destination or trek name so I can help you (e.g., 'plan a trip to Jaipur', 'hotels in Dubai').",
+      tool,
+      trekName: null,
+      source: "local",
+      facts: [],
+      suggestions: ["Plan a trip to Manali", "Hotels in Jaipur", "Packing list for Ladakh"],
+    };
+  }
+
+  // GLOBAL CACHE CONNECTOR FOR ANY TRAVEL SUB-TOOL
+  if (tool !== "chat") {
+    const destName = name as string;
+    let category = tool as string;
+    if (tool === "planner") {
+      category = "planner_3d_1p_mid-range";
+    } else if (tool === "hotel") {
+      category = "hotel_mid-range";
+    }
+
+    const isRefreshRequested = /refresh|update|reload/i.test(lastUserMessage.content);
+    let cachedItem = null;
+    if (!isRefreshRequested) {
+      cachedItem = await getCachedSectionFromMongo(category, destName);
+    }
+    
+    if (cachedItem) {
       return {
-        reply: cachedPlan,
+        reply: cachedItem,
         tool,
-        trekName: activeMatch?.name ?? null,
+        trekName: activeMatch?.name ?? extractedName,
         source: "local",
         facts: factsForMatch(activeMatch),
-        suggestions: quickReplies(tool, activeMatch),
+        suggestions: quickReplies(tool, activeMatch, destName),
       };
     }
 
-    let generatedPlan = "";
-    let isGroq = false;
-    
-    const groqReply = await askGroq([
-      {
-        role: "user",
-        content: `Create a highly detailed, professional travel plan for ${name}. Include:
+    // Call Groq API dynamically to generate a highly detailed response
+    const key = process.env.GROQ_API_KEY;
+    if (key) {
+      let prompt = "";
+      if (tool === "planner") {
+        prompt = `Create a highly detailed, professional travel plan for ${destName}. Include:
 1) Daily Itinerary
-2) Estimated Budget Breakdown (as a markdown table)
-3) Accommodation Planned (Budget, Mid-range, Luxury options)
+2) Estimated Budget Breakdown (as a markdown table using Indian Rupees ₹ / INR values)
+3) Accommodation Planned (Budget, Mid-range, Luxury options with pricing estimates in Indian Rupees ₹)
 4) Dining & Local Cuisine
 5) Sightseeing & Hidden Gems
 6) Adventure Activities
@@ -615,28 +763,40 @@ export async function buildAgentResponse(messages: ChatMessage[]): Promise<Agent
 8) Packing List
 9) Safety & Emergency Information.
 
-Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakdown' so the UI showcase tabs can extract them.`
+Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakdown' so the UI showcase tabs can extract them.`;
+      } else if (tool === "hotel") {
+        prompt = `Recommend 3 actual, popular real-world accommodation options (with names, budget range in Indian Rupees ₹, and brief descriptions) for a user traveling to ${destName} with a "Mid-range" travel style. Keep it realistic, detailed, and concise.`;
+      } else if (tool === "restaurant") {
+        prompt = `Recommend 3 actual, popular local eateries (including cafes, traditional restaurants, and street food areas) for a user visiting ${destName}. Write a brief, appetizing description for each. Keep it concise.`;
+      } else if (tool === "transport") {
+        prompt = `Write a clear, structured transportation guide for a user traveling to ${destName}. Provide real-world logistics advice on nearest airport transfer, nearby railway stations, highway routes, and local vehicle rentals. Keep it realistic and concise.`;
+      } else if (tool === "nearby") {
+        prompt = `Recommend sightseeing spots for a user visiting ${destName}. Provide 2-3 real major tourist attractions with name/description, 1-2 offbeat hidden gems, and 1-2 scenic photo spots. Keep it realistic and concise.`;
+      } else if (tool === "budget") {
+        prompt = `Estimate a detailed travel budget breakdown for a trip to ${destName} for 3 days. Format it as a markdown table with stay, transport, food, activities, and contingency. Use Indian Rupees (₹) and realistic INR costs. Keep it clean and concise.`;
+      } else if (tool === "packing") {
+        prompt = `Create a detailed travel packing checklist for a user visiting ${destName} based on its regional climate. Keep it categorized and concise.`;
+      } else if (tool === "weather") {
+        prompt = `Provide a current average weather forecast, seasonal guide, and safety advisory for a traveler visiting ${destName}. Keep it realistic and concise.`;
+      } else {
+        // General query prompt
+        prompt = `Provide a detailed, practical, and helpful travel guide section about "${tool}" for a visitor going to ${destName}. Keep it concise.`;
       }
-    ]);
 
-    if (groqReply) {
-      generatedPlan = groqReply;
-      isGroq = true;
-    } else {
-      generatedPlan = buildLocalReply(tool, activeMatch, lastUserMessage.content);
+      const groqReply = await askGroq([{ role: "user", content: prompt }]);
+      if (groqReply) {
+        // Save the generated response to MongoDB Atlas
+        await saveSectionToMongo(category, destName, groqReply);
+        return {
+          reply: groqReply,
+          tool,
+          trekName: activeMatch?.name ?? extractedName,
+          source: "ollama", // "ollama" acts as model-source flag
+          facts: factsForMatch(activeMatch),
+          suggestions: quickReplies(tool, activeMatch, destName),
+        };
+      }
     }
-    
-    // Save generated plan to MongoDB Atlas
-    await savePlanToMongo(name, 3, 1, "mid-range", generatedPlan);
-
-    return {
-      reply: generatedPlan,
-      tool,
-      trekName: activeMatch?.name ?? null,
-      source: isGroq ? "ollama" : "local", // "ollama" acts as model-source flag
-      facts: factsForMatch(activeMatch),
-      suggestions: quickReplies(tool, activeMatch),
-    };
   }
 
   if (tool === "chat") {
@@ -646,10 +806,10 @@ Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakd
       return {
         reply: groqReply,
         tool,
-        trekName: activeMatch?.name ?? null,
+        trekName: activeMatch?.name ?? extractedName,
         source: "ollama",
         facts: factsForMatch(activeMatch),
-        suggestions: quickReplies(tool, activeMatch),
+        suggestions: quickReplies(tool, activeMatch, name),
       };
     }
 
@@ -659,19 +819,19 @@ Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakd
         "Try asking for a travel plan, budget breakdown, packing lists, or hotel recommendations to activate my travel tools."
       ].join("\n\n"),
       tool,
-      trekName: activeMatch?.name ?? null,
+      trekName: activeMatch?.name ?? extractedName,
       source: "local",
       facts: factsForMatch(activeMatch),
-      suggestions: quickReplies(tool, activeMatch),
+      suggestions: quickReplies(tool, activeMatch, name),
     };
   }
 
   return {
-    reply: buildLocalReply(tool, activeMatch, lastUserMessage.content),
+    reply: buildLocalReply(tool, name || "Goa", lastUserMessage.content),
     tool,
-    trekName: activeMatch?.name ?? null,
+    trekName: activeMatch?.name ?? extractedName,
     source: "local",
     facts: factsForMatch(activeMatch),
-    suggestions: quickReplies(tool, activeMatch),
+    suggestions: quickReplies(tool, activeMatch, name),
   };
 }

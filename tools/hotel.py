@@ -78,8 +78,8 @@ def get_hotel_recommendations(destination: str, style: str = "Mid-range", llm: O
         ]
 
     from tools.db import get_cached_item, save_cached_item
-    cache_key = f"{dest_key}_{style_key.lower()}"
-    cached = get_cached_item("hotels", cache_key)
+    section_category = f"hotel_{style_key.lower()}"
+    cached = get_cached_item(section_category, destination)
     if cached:
         return cached
 
@@ -101,7 +101,7 @@ Make sure the hotels are realistic, popular, and match the budget class of "{sty
 """
             res = llm.invoke(prompt)
             if res:
-                save_cached_item("hotels", cache_key, res)
+                save_cached_item(section_category, destination, res)
                 return res
         except Exception:
             pass

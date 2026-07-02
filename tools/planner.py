@@ -13,7 +13,7 @@ from tools.travel_tips import get_travel_tips
 from tools.events import get_cultural_events
 from tools.activities import get_adventure_activities
 from tools.trek import detect_trek, format_trek_info
-from tools.db import get_cached_plan, save_plan_to_cache
+from tools.db import get_cached_item, save_cached_item
 
 def create_travel_plan(query: str, llm: Optional[Any] = None) -> str:
     # 1. Extract details from the user prompt
@@ -31,12 +31,13 @@ def create_travel_plan(query: str, llm: Optional[Any] = None) -> str:
         if trek_name:
             destination = trek_name
         else:
-            destination = "Goa"  # Fallback destination if none extracted
-
+            return "Please specify a destination or trek name so I can help you plan (e.g. 'plan a trip to Jaipur', 'hotels in Dubai')."
+        
     destination_title = destination.title()
 
     # CHECK CACHE FIRST BEFORE GENERATING HEAVY PARTS
-    cached_plan = get_cached_plan(destination, duration, travellers, style)
+    section_category = f"planner_{duration}d_{travellers}p_{style.lower()}"
+    cached_plan = get_cached_item(section_category, destination)
     if cached_plan:
         return cached_plan
 
@@ -123,6 +124,6 @@ def create_travel_plan(query: str, llm: Optional[Any] = None) -> str:
     plan_text = "\n".join(plan)
     
     # SAVE TO CACHE FOR NEXT TIME
-    save_plan_to_cache(destination, duration, travellers, style, plan_text)
+    save_cached_item(section_category, destination, plan_text)
     
     return plan_text

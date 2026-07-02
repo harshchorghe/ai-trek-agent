@@ -55,8 +55,7 @@ def get_transportation_guidance(destination: str, llm: Optional[Any] = None) -> 
         public_transport = "Renting a local vehicle, auto-rickshaws, or using state-run bus transport is recommended."
 
     from tools.db import get_cached_item, save_cached_item
-    cache_key = f"{dest_key}"
-    cached = get_cached_item("transport", cache_key)
+    cached = get_cached_item("transport", destination)
     if cached:
         return cached
 
@@ -85,7 +84,7 @@ Keep it realistic and concise.
 """
             res = llm.invoke(prompt)
             if res:
-                save_cached_item("transport", cache_key, res)
+                save_cached_item("transport", destination, res)
                 return res
         except Exception:
             pass

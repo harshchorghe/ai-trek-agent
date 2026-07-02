@@ -57,8 +57,7 @@ def get_restaurant_recommendations(destination: str, llm: Optional[Any] = None) 
         street_food = [f"Local traditional street stalls in {destination.title()}", f"Famous sweet & snack outlets in {destination.title()}"]
 
     from tools.db import get_cached_item, save_cached_item
-    cache_key = f"{dest_key}"
-    cached = get_cached_item("restaurants", cache_key)
+    cached = get_cached_item("restaurant", destination)
     if cached:
         return cached
 
@@ -81,7 +80,7 @@ Make sure these are real-world, famous food spots in {destination}. Write a brie
 """
             res = llm.invoke(prompt)
             if res:
-                save_cached_item("restaurants", cache_key, res)
+                save_cached_item("restaurant", destination, res)
                 return res
         except Exception:
             pass

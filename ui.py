@@ -123,15 +123,17 @@ if st.button("Ask Assistant", type="primary") or (user_input and st.session_stat
             # 3. Process response
             response = ""
             
-            if tool == "planner":
+            dest_required_tools = ["planner", "budget", "packing", "weather", "hotel", "restaurant", "transport", "emergency", "nearby", "activities", "trek"]
+            if tool in dest_required_tools and not active_dest:
+                response = "Please specify a destination or trek name so I can help you (e.g. 'plan a trip to Jaipur', 'hotels in Dubai')."
+            elif tool == "planner":
                 response = create_travel_plan(user_input, llm)
             elif tool == "faq":
                 faq_ans = answer_faq(user_input, llm)
                 response = faq_ans if faq_ans else "I couldn't find a direct FAQ answer, but let me know what details you need!"
             elif tool == "budget":
-                dest = active_dest or "Goa"
                 response = estimate_budget(
-                    destination=dest,
+                    destination=active_dest,
                     days=details.get("duration", 3),
                     travellers=details.get("travellers", 1),
                     style=details.get("style", "Mid-range"),
@@ -139,39 +141,29 @@ if st.button("Ask Assistant", type="primary") or (user_input and st.session_stat
                     llm=llm
                 )
             elif tool == "packing":
-                dest = active_dest or ""
-                response = get_packing_list(query=user_input, destination=dest, llm=llm)
+                response = get_packing_list(query=user_input, destination=active_dest, llm=llm)
             elif tool == "weather":
-                if active_dest:
-                    response = get_weather(active_dest)
-                else:
-                    response = "Please specify a destination to check the weather. E.g. 'Weather in Goa'."
+                response = get_weather(active_dest)
             elif tool == "hotel":
-                dest = active_dest or "Goa"
-                response = get_hotel_recommendations(destination=dest, style=details.get("style", "Mid-range"), llm=llm)
+                response = get_hotel_recommendations(destination=active_dest, style=details.get("style", "Mid-range"), llm=llm)
             elif tool == "restaurant":
-                dest = active_dest or "Goa"
-                response = get_restaurant_recommendations(destination=dest, llm=llm)
+                response = get_restaurant_recommendations(destination=active_dest, llm=llm)
             elif tool == "destination":
                 response = recommend_destinations(user_input, llm)
             elif tool == "transport":
-                dest = active_dest or "Goa"
-                response = get_transportation_guidance(destination=dest, llm=llm)
+                response = get_transportation_guidance(destination=active_dest, llm=llm)
             elif tool == "emergency":
-                dest = active_dest or ""
-                response = get_emergency_guidance(query=user_input, destination=dest, llm=llm)
+                response = get_emergency_guidance(query=user_input, destination=active_dest, llm=llm)
             elif tool == "visa":
                 response = get_visa_guidance(user_input, llm)
             elif tool == "currency":
                 response = get_currency_guidance(user_input, llm)
             elif tool == "nearby":
-                dest = active_dest or "Goa"
-                response = get_nearby_attractions(destination=dest, llm=llm)
+                response = get_nearby_attractions(destination=active_dest, llm=llm)
             elif tool == "activities":
-                dest = active_dest or "Goa"
-                response = get_adventure_activities(destination=dest, llm=llm)
+                response = get_adventure_activities(destination=active_dest, llm=llm)
             elif tool == "trek":
-                trek_name = active_dest or "kalsubai"
+                trek_name = active_dest
                 if "difficulty" in user_input.lower() or "how difficult" in user_input.lower():
                     response = f"Difficulty of {trek_name.title()}: {get_trek_difficulty(trek_name)}"
                 else:

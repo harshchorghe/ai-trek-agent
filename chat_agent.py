@@ -118,6 +118,11 @@ while True:
     # ========================================================
     # TOOL ROUTING EXECUTION
     # ========================================================
+    dest_required_tools = ["planner", "budget", "packing", "weather", "hotel", "restaurant", "transport", "emergency", "nearby", "activities", "trek"]
+    if tool in dest_required_tools and not active_dest:
+        print("Assistant: Please specify a destination or trek name so I can help you (e.g. 'plan a trip to Jaipur', 'hotels in Dubai').\n")
+        continue
+
     if tool == "planner":
         response = create_travel_plan(user_input, llm)
 
@@ -129,9 +134,8 @@ while True:
             response = "I couldn't find a direct FAQ answer. Please let me know what travel info you need!"
 
     elif tool == "budget":
-        dest = active_dest or "Goa"
         response = estimate_budget(
-            destination=dest,
+            destination=active_dest,
             days=details.get("duration", 3),
             travellers=details.get("travellers", 1),
             style=details.get("style", "Mid-range"),
@@ -140,33 +144,25 @@ while True:
         )
 
     elif tool == "packing":
-        dest = active_dest or ""
-        response = get_packing_list(query=user_input, destination=dest, llm=llm)
+        response = get_packing_list(query=user_input, destination=active_dest, llm=llm)
 
     elif tool == "weather":
-        if active_dest:
-            response = get_weather(active_dest)
-        else:
-            response = "I can check the weather once you name the destination. E.g., 'Weather in Goa'."
+        response = get_weather(active_dest)
 
     elif tool == "hotel":
-        dest = active_dest or "Goa"
-        response = get_hotel_recommendations(destination=dest, style=details.get("style", "Mid-range"), llm=llm)
+        response = get_hotel_recommendations(destination=active_dest, style=details.get("style", "Mid-range"), llm=llm)
 
     elif tool == "restaurant":
-        dest = active_dest or "Goa"
-        response = get_restaurant_recommendations(destination=dest, llm=llm)
+        response = get_restaurant_recommendations(destination=active_dest, llm=llm)
 
     elif tool == "destination":
         response = recommend_destinations(user_input, llm)
 
     elif tool == "transport":
-        dest = active_dest or "Goa"
-        response = get_transportation_guidance(destination=dest, llm=llm)
+        response = get_transportation_guidance(destination=active_dest, llm=llm)
 
     elif tool == "emergency":
-        dest = active_dest or ""
-        response = get_emergency_guidance(query=user_input, destination=dest, llm=llm)
+        response = get_emergency_guidance(query=user_input, destination=active_dest, llm=llm)
 
     elif tool == "visa":
         response = get_visa_guidance(user_input, llm)
@@ -175,12 +171,10 @@ while True:
         response = get_currency_guidance(user_input, llm)
 
     elif tool == "nearby":
-        dest = active_dest or "Goa"
-        response = get_nearby_attractions(destination=dest, llm=llm)
+        response = get_nearby_attractions(destination=active_dest, llm=llm)
 
     elif tool == "activities":
-        dest = active_dest or "Goa"
-        response = get_adventure_activities(destination=dest, llm=llm)
+        response = get_adventure_activities(destination=active_dest, llm=llm)
 
     elif tool == "trek":
         # Handle trek information or difficulty

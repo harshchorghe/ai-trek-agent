@@ -52,8 +52,7 @@ def get_nearby_attractions(destination: str, llm: Optional[Any] = None) -> str:
         photo_spots = [f"Scenic overlook during sunset in {destination.title()}", f"Local colorful architecture in {destination.title()}"]
 
     from tools.db import get_cached_item, save_cached_item
-    cache_key = f"{dest_key}"
-    cached = get_cached_item("nearby", cache_key)
+    cached = get_cached_item("nearby", destination)
     if cached:
         return cached
 
@@ -79,7 +78,7 @@ Keep it realistic, highly detailed, and concise.
 """
             res = llm.invoke(prompt)
             if res:
-                save_cached_item("nearby", cache_key, res)
+                save_cached_item("nearby", destination, res)
                 return res
         except Exception:
             pass
