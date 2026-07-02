@@ -1,6 +1,13 @@
-def extract_location(user_input, llm):
+from tools.trip_details import extract_trip_details
 
-    prompt = f"""
+def extract_location(user_input, llm=None):
+    # Try the new detailed extraction first
+    details = extract_trip_details(user_input, llm)
+    if details.get("destination"):
+        return details["destination"]
+        
+    if llm:
+        prompt = f"""
 Extract only the trek/location name.
 
 Examples:
@@ -17,5 +24,6 @@ Output: Kunjargad
 Input: {user_input}
 Output:
 """
-
-    return llm.invoke(prompt).strip()
+        return llm.invoke(prompt).strip()
+        
+    return user_input.strip()

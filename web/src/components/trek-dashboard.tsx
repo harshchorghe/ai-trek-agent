@@ -13,7 +13,7 @@ const initialMessage: ConversationItem = {
   id: "welcome",
   role: "assistant",
   content:
-    "Welcome to TrekForge. Ask me anything about Maharashtra treks — route planning, packing lists, difficulty, or weather windows.",
+    "Welcome to Explorush AI Travel Assistant! 🎒\n\nI am your experienced travel consultant. Ask me anything about trip planning, budget estimates, packing guides, hotels, dining, or trekking adventures.",
 };
 
 export function ChatConsole() {
@@ -67,7 +67,7 @@ export function ChatConsole() {
         {
           id: `${Date.now()}-error`,
           role: "assistant",
-          content: "Agent endpoint unavailable. Please start the Next.js app and try again.",
+          content: "Travel assistant endpoint unavailable. Please start the Next.js app and try again.",
         },
       ]);
     } finally {
@@ -76,38 +76,43 @@ export function ChatConsole() {
   }
 
   return (
-    <div className="flex flex-col h-[560px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+    <div className="flex flex-col h-[600px] bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-            TrekForge agent
-          </span>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-950/60 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div>
+            <span className="text-sm font-semibold text-slate-100 block">
+              Explorush AI Travel Assistant
+            </span>
+            <span className="text-[10px] text-slate-400">
+              Active Session Context Enabled
+            </span>
+          </div>
         </div>
-        <span className="text-xs text-slate-400">
-          Maharashtra trek assistant · Ollama fallback enabled
+        <span className="text-xs text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">
+          Agent Version 2.0
         </span>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-4 bg-slate-900/40">
         {conversation.map((item) => (
           <div
             key={item.id}
-            className={`flex flex-col max-w-[80%] ${
+            className={`flex flex-col max-w-[85%] ${
               item.role === "user" ? "self-end items-end" : "self-start items-start"
             }`}
           >
-            <span className="text-[11px] text-slate-400 mb-1 flex items-center gap-1">
+            <span className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
               {item.role === "user" ? (
                 "You"
               ) : (
                 <>
-                  Agent
+                  Explorush Consultant
                   {item.meta?.tool && (
-                    <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700 rounded-full px-2 py-0.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-950/40 text-emerald-300 border border-emerald-800 rounded-full px-2 py-0.5 font-mono">
                       {item.meta.tool}
                     </span>
                   )}
@@ -116,10 +121,10 @@ export function ChatConsole() {
             </span>
 
             <div
-              className={`px-3 py-2 rounded-xl text-sm leading-relaxed ${
+              className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                 item.role === "user"
-                  ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-700"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                  ? "bg-emerald-600 text-slate-50 shadow-md rounded-tr-none border border-emerald-500"
+                  : "bg-slate-800 text-slate-100 shadow-md rounded-tl-none border border-slate-700"
               }`}
             >
               <p className="whitespace-pre-wrap">{item.content}</p>
@@ -131,10 +136,10 @@ export function ChatConsole() {
                 {item.meta.facts.map((fact) => (
                   <div
                     key={fact.label}
-                    className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1 text-[11.5px] text-slate-500 dark:text-slate-400"
+                    className="bg-slate-950/60 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] text-slate-400"
                   >
                     {fact.label}:{" "}
-                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                    <span className="font-semibold text-slate-200">
                       {fact.value}
                     </span>
                   </div>
@@ -150,7 +155,7 @@ export function ChatConsole() {
                     key={s}
                     type="button"
                     onClick={() => setInput(s)}
-                    className="text-xs px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                    className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 hover:bg-emerald-950/20 transition-all duration-200"
                   >
                     {s}
                   </button>
@@ -163,12 +168,12 @@ export function ChatConsole() {
         {/* Typing indicator */}
         {isSending && (
           <div className="self-start flex flex-col max-w-[80%]">
-            <span className="text-[11px] text-slate-400 mb-1">Agent</span>
-            <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 flex gap-1 items-center">
+            <span className="text-[10px] text-slate-400 mb-1">Explorush Consultant</span>
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-none px-4 py-3 flex gap-1.5 items-center">
               {[0, 150, 300].map((delay) => (
                 <span
                   key={delay}
-                  className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
+                  className="w-2 h-2 rounded-full bg-slate-400 animate-bounce"
                   style={{ animationDelay: `${delay}ms` }}
                 />
               ))}
@@ -180,14 +185,14 @@ export function ChatConsole() {
       </div>
 
       {/* Quick prompts */}
-      <div className="px-4 py-2 border-t border-slate-200 dark:border-slate-700 flex gap-1.5 flex-wrap items-center">
-        <span className="text-[11px] text-slate-400 mr-1">Quick:</span>
+      <div className="px-5 py-2.5 border-t border-slate-800/80 bg-slate-950/20 flex gap-2 flex-wrap items-center">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1">Quick:</span>
         {QUICK_PROMPTS.map((prompt) => (
           <button
             key={prompt}
             type="button"
             onClick={() => setInput(prompt)}
-            className="text-xs px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+            className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-800/60 text-slate-300 hover:border-emerald-500 hover:text-emerald-300 hover:bg-emerald-950/25 transition-all duration-200"
           >
             {prompt}
           </button>
@@ -195,19 +200,19 @@ export function ChatConsole() {
       </div>
 
       {/* Input row */}
-      <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex gap-2">
+      <div className="px-5 py-4 border-t border-slate-800 bg-slate-950/40 flex gap-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void submitPrompt(input); }}
-          placeholder="Ask about routes, packing, weather, difficulty…"
-          className="flex-1 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-emerald-400 dark:focus:border-emerald-500 transition-colors"
+          placeholder="Ask about planning, packing, budget estimation, safety..."
+          className="flex-1 h-10 rounded-xl border border-slate-700 bg-slate-850 px-4 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-emerald-500 transition-colors"
         />
         <button
           type="button"
           onClick={() => void submitPrompt(input)}
           disabled={isSending}
-          className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center gap-1.5"
+          className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 shadow-lg shadow-emerald-900/20"
         >
           {isSending ? "Sending…" : "Send"}
         </button>

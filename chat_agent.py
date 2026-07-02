@@ -1,278 +1,226 @@
+import os
+import sys
+
+# Reconfigure stdout to use UTF-8 to prevent encoding errors on Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from langchain_ollama import OllamaLLM
-from collections import deque
 
-from tools.location_extractor import extract_location
-
-# ============================================================
-# TREK TOOLS
-# ============================================================
-
-from tools.trek_detector import detect_trek
-from tools.trek_info import format_trek_info
-from tools.planner import create_trek_plan
-
-# ============================================================
-# OTHER TOOLS
-# ============================================================
-
+# Import tools
+from tools.conversation import (
+    load_session,
+    save_session,
+    get_active_destination,
+    set_active_destination,
+    append_to_chat_history,
+    get_chat_history_as_string
+)
+from tools.trip_details import extract_trip_details
+from tools.trek import detect_trek, format_trek_info, get_trek_difficulty
+from tools.planner import create_travel_plan
+from tools.budget import estimate_budget
 from tools.packing import get_packing_list
-from tools.difficulty import get_trek_difficulty
-from tools.itinerary import generate_itinerary
 from tools.weather import get_weather
+from tools.hotel import get_hotel_recommendations
+from tools.restaurant import get_restaurant_recommendations
+from tools.destination import recommend_destinations
+from tools.transport import get_transportation_guidance
+from tools.trip_type import get_trip_type_advice
+from tools.nearby import get_nearby_attractions
+from tools.currency import get_currency_guidance
+from tools.emergency import get_emergency_guidance
+from tools.visa import get_visa_guidance
+from tools.travel_tips import get_travel_tips
+from tools.events import get_cultural_events
+from tools.activities import get_adventure_activities
+from tools.itinerary import generate_itinerary
+from tools.faq import answer_faq
 
-# ============================================================
-# TOOL ROUTER
-# ============================================================
-
+# Tool Router
 from tool_router import choose_tool
-
-# ============================================================
-# MEMORY CONFIGURATION
-# ============================================================
-
-MEMORY_FILE = "memory/chat_history.txt"
 
 # ============================================================
 # LLM CONFIGURATION
 # ============================================================
-
-llm = OllamaLLM(
-    model="phi3",
-    temperature=0.2,
-    num_predict=180,
-    keep_alive="30m",
-)
-
-# ============================================================
-# CONVERSATION MEMORY
-# ============================================================
-
-conversation = deque(maxlen=12)
-
+# We use Ollama with local fallback support.
 try:
-
-    with open(MEMORY_FILE, "r", encoding="utf-8") as file:
-
-        lines = file.readlines()
-
-        for line in lines[-12:]:
-
-            conversation.append(
-                line.strip()
-            )
-
-    print("✅ Previous memory loaded")
-
-except FileNotFoundError:
-
-    print("⚠️ No previous memory found")
+    llm = OllamaLLM(
+        model="phi3",
+        temperature=0.2,
+        num_predict=180,
+        keep_alive="30m",
+    )
+    # Quick probe to test if Ollama server is up
+    llm.invoke("Hi")
+    ollama_enabled = True
+    print("✅ Ollama (phi3) loaded successfully")
+except Exception:
+    llm = None
+    ollama_enabled = False
+    print("⚠️ Ollama offline. Falling back to deterministic local rule engines")
 
 # ============================================================
 # APPLICATION START
 # ============================================================
+print("\n🎒 Explorush AI Travel Assistant")
+print("Type 'exit' to quit, 'clear' to reset chat history/session\n")
 
-print("\n🥾 AI Trek Planner")
-print("Type 'exit' to quit\n")
+# Set initial destination state if any
+active_dest = get_active_destination()
+if active_dest:
+    print(f"📌 Active Trip Destination Context: {active_dest}")
 
 # ============================================================
 # MAIN LOOP
 # ============================================================
-
 while True:
-
-    user_input = input("You: ").strip()
-
-    if user_input.lower() == "exit":
-
+    try:
+        user_input = input("You: ").strip()
+    except (KeyboardInterrupt, EOFError):
         print("\n👋 Goodbye!")
         break
+
+    if user_input.lower() == "exit":
+        print("\n👋 Goodbye!")
+        break
+
+    if user_input.lower() == "clear":
+        from tools.conversation import clear_session
+        clear_session()
+        print("🧹 Chat history and destination context cleared!\n")
+        continue
 
     if not user_input:
         continue
 
-    # ========================================================
-    # TOOL SELECTION
-    # ========================================================
+    # 1. Update session active destination if user specifies one
+    details = extract_trip_details(user_input, llm)
+    current_dest = details.get("destination")
+    
+    # If no destination found, check for a trek name
+    if not current_dest:
+        trek_name = detect_trek(user_input)
+        if trek_name:
+            current_dest = trek_name
 
+    if current_dest:
+        set_active_destination(current_dest)
+        active_dest = current_dest
+    else:
+        # Check active destination in session
+        active_dest = get_active_destination()
+
+    # 2. Select tool
     tool = choose_tool(user_input)
+    print(f"\n[Routing to Tool: {tool} | Active Destination: {active_dest or 'None'}]\n")
 
-    print(f"\n[Selected Tool: {tool}]\n")
+    response = ""
 
     # ========================================================
-    # TOOL 1 : PACKING LIST
+    # TOOL ROUTING EXECUTION
     # ========================================================
+    if tool == "planner":
+        response = create_travel_plan(user_input, llm)
 
-    if tool == "packing":
+    elif tool == "faq":
+        faq_ans = answer_faq(user_input, llm)
+        if faq_ans:
+            response = faq_ans
+        else:
+            response = "I couldn't find a direct FAQ answer. Please let me know what travel info you need!"
 
-        print(
-            "\nAI:",
-            get_packing_list()
+    elif tool == "budget":
+        dest = active_dest or "Goa"
+        response = estimate_budget(
+            destination=dest,
+            days=details.get("duration", 3),
+            travellers=details.get("travellers", 1),
+            style=details.get("style", "Mid-range"),
+            user_budget=details.get("budget"),
+            llm=llm
         )
 
-        print()
-
-        continue
-
-    # ========================================================
-    # TOOL 2 : DIFFICULTY
-    # ========================================================
-
-    elif tool == "difficulty":
-
-        trek_name = extract_location(
-            user_input,
-            llm
-        )
-
-        print(f"\nDetected Trek: {trek_name}")
-
-        print(
-            "\nAI:",
-            get_trek_difficulty(trek_name)
-        )
-
-        print()
-
-        continue
-
-    # ========================================================
-    # TOOL 3 : ITINERARY
-    # ========================================================
-
-    elif tool == "itinerary":
-
-        trek_name = extract_location(
-            user_input,
-            llm
-        )
-
-        print(
-            "\nAI:",
-            generate_itinerary()
-        )
-
-        print()
-
-        continue
-
-    # ========================================================
-    # TOOL 4 : WEATHER
-    # ========================================================
+    elif tool == "packing":
+        dest = active_dest or ""
+        response = get_packing_list(query=user_input, destination=dest, llm=llm)
 
     elif tool == "weather":
+        if active_dest:
+            response = get_weather(active_dest)
+        else:
+            response = "I can check the weather once you name the destination. E.g., 'Weather in Goa'."
 
-        location = extract_location(
-            user_input,
-            llm
-        )
+    elif tool == "hotel":
+        dest = active_dest or "Goa"
+        response = get_hotel_recommendations(destination=dest, style=details.get("style", "Mid-range"), llm=llm)
 
-        print(f"\nDetected Location: {location}")
+    elif tool == "restaurant":
+        dest = active_dest or "Goa"
+        response = get_restaurant_recommendations(destination=dest, llm=llm)
 
-        print(
-            "\nAI:",
-            get_weather(location)
-        )
+    elif tool == "destination":
+        response = recommend_destinations(user_input, llm)
 
-        print()
+    elif tool == "transport":
+        dest = active_dest or "Goa"
+        response = get_transportation_guidance(destination=dest, llm=llm)
 
-        continue
+    elif tool == "emergency":
+        dest = active_dest or ""
+        response = get_emergency_guidance(query=user_input, destination=dest, llm=llm)
 
-    # ========================================================
-    # TOOL 5 : TREK PLANNER
-    # ========================================================
+    elif tool == "visa":
+        response = get_visa_guidance(user_input, llm)
 
-    elif tool == "planner":
+    elif tool == "currency":
+        response = get_currency_guidance(user_input, llm)
 
-        trek_name = extract_location(
-            user_input,
-            llm
-        )
+    elif tool == "nearby":
+        dest = active_dest or "Goa"
+        response = get_nearby_attractions(destination=dest, llm=llm)
 
-        print(f"\nDetected Trek: {trek_name}")
+    elif tool == "activities":
+        dest = active_dest or "Goa"
+        response = get_adventure_activities(destination=dest, llm=llm)
 
-        print(
-            "\nAI:",
-            create_trek_plan(
-                trek_name,
-                llm
-            )
-        )
+    elif tool == "trek":
+        # Handle trek information or difficulty
+        trek_name = active_dest or "kalsubai"
+        if "difficulty" in user_input.lower() or "how difficult" in user_input.lower():
+            response = f"Difficulty of {trek_name.title()}: {get_trek_difficulty(trek_name)}"
+        else:
+            response = format_trek_info(trek_name)
 
-        print()
-
-        continue
-
-    # ========================================================
-    # TOOL 6 : TREK INFORMATION
-    # ========================================================
-
-    elif tool == "trek_info":
-
-        trek_name = extract_location(
-            user_input,
-            llm
-        )
-
-        print(f"\nDetected Trek: {trek_name}")
-
-        print(
-            "\nAI:",
-            format_trek_info(trek_name)
-        )
-
-        print()
-
-        continue
-
-    # ========================================================
-    # NORMAL AI CHAT
-    # ========================================================
-
-    user_message = f"User: {user_input}"
-
-    conversation.append(user_message)
-
-    with open(
-        MEMORY_FILE,
-        "a",
-        encoding="utf-8"
-    ) as file:
-
-        file.write(
-            user_message + "\n"
-        )
-
-    prompt = """
-You are TrekGPT, an expert trekking guide from Maharashtra.
-
-You help users with:
-- Trek recommendations
-- Trek planning
-- Packing advice
-- Safety tips
-- Weather preparation
-
-Give practical and concise answers.
+    else:
+        # NORMAL AI CHAT FALLBACK
+        append_to_chat_history("User", user_input)
+        chat_history = get_chat_history_as_string(limit=10)
+        
+        prompt = """You are an experienced, friendly, and professional travel consultant for Explorush.
+You help users with their travel planning, destination advice, logistics, packing, budget plans, and trek queries.
+Be natural, helpful, and concise. Do not sound robotic.
 """
+        if active_dest:
+            prompt += f"\nNote: The user is currently planning a trip to {active_dest}.\n"
+            
+        prompt += f"\nConversation History:\n{chat_history}\nAI:"
+        
+        if ollama_enabled and llm:
+            try:
+                response = llm.invoke(prompt)
+            except Exception:
+                response = "I'm having trouble connecting to my AI brain, but I'm ready to help using my travel tools. Try asking me to plan a trip, recommend places, or build a packing checklist!"
+        else:
+            response = "I'm currently running in offline travel mode. Try asking: 'Plan a trip to Goa', 'Recommend a budget weekend trip', 'What should I pack?', or 'Is Manali safe?'"
 
-    prompt += "\n".join(conversation)
-    prompt += "\nAI:"
+    # Print Response
+    print(f"AI: {response}\n")
 
-    response = llm.invoke(prompt)
-
-    print("\nAI:", response)
-    print()
-
-    ai_message = f"AI: {response}"
-
-    conversation.append(ai_message)
-
-    with open(
-        MEMORY_FILE,
-        "a",
-        encoding="utf-8"
-    ) as file:
-
-        file.write(
-            ai_message + "\n"
-        )
+    # Record history
+    if tool != "chat":
+        # Also record tool replies to keep chat context rich
+        append_to_chat_history("User", user_input)
+        append_to_chat_history("AI", response)

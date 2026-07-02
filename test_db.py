@@ -1,16 +1,30 @@
-from langchain_ollama import OllamaLLM
-from tools.location_extractor import extract_location
+import sys
+import json
 
-llm = OllamaLLM(
-    model="phi3",
-    temperature=0
-)
+# Reconfigure stdout to use UTF-8 to prevent encoding errors on Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+from tools.trip_details import extract_trip_details
+
+print("🧪 Explorush Parameter Extraction Test Utility")
+print("Type a trip description to see extracted details. Type 'exit' to quit.\n")
 
 while True:
-
-    text = input("Message: ")
-
-    print(
-        "Location:",
-        extract_location(text, llm)
-    )
+    try:
+        text = input("Message: ").strip()
+    except (KeyboardInterrupt, EOFError):
+        break
+        
+    if text.lower() == "exit":
+        break
+        
+    if not text:
+        continue
+        
+    # Test deterministic & LLM extraction (offline test, so LLM=None)
+    details = extract_trip_details(text, llm=None)
+    
+    print("\nExtracted Parameters:")
+    print(json.dumps(details, indent=2))
+    print()

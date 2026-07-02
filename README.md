@@ -1,278 +1,188 @@
-# AI Trek Agent
+# Explorush AI Travel Agent
 
-AI Trek Agent is a local trekking assistant for Maharashtra-focused trek planning. It uses Ollama-backed LLM calls plus a small set of deterministic tools to answer trek questions, build plans, estimate difficulty, suggest packing, check weather, and extract trip details.
+Explorush AI Travel Agent is an intelligent travel assistant and trip planner. It acts as a knowledgeable travel consultant to help users plan trips, get budget estimates, receive weather-aware guidance, generate customized packing lists, and discover local sightseeing, dining, and adventure activities—while keeping trekking as a core capability.
 
-## What This Project Does
+---
 
-The assistant can handle:
-
-- trek recommendations
-- trek planning
-- packing advice
-- difficulty estimation
-- itinerary generation
-- weather-aware guidance
-- trek information lookup
-- basic trip detail extraction, including date and time
-
-## Project Flow
+## Architecture & Flow
 
 ### Main Runtime Flow
 
+The assistant routes inputs using an upgraded keyword & regex-based deterministic router. When Ollama is offline or uninstalled, it falls back to rich local rule-based databases, ensuring high availability.
+
 ```mermaid
 flowchart TD
-    A[User input] --> B[chat_agent.py]
+    A[User Input] --> B[Interface: CLI / Streamlit / Next.js API]
     B --> C[tool_router.choose_tool]
-    C -->|trip_details| D[tools.trip_details.extract_trip_details]
-    C -->|packing| E[tools.packing.get_packing_list]
-    C -->|difficulty| F[tools.difficulty.get_trek_difficulty]
-    C -->|itinerary| G[tools.itinerary.generate_itinerary]
-    C -->|weather| H[tools.weather.get_weather]
-    C -->|planner| I[tools.planner.create_trek_plan]
-    C -->|trek_info| J[tools.trek_info.format_trek_info]
-    C -->|chat| K[OllamaLLM response]
-    D --> L[Printed answer]
-    E --> L
-    F --> L
-    G --> L
-    H --> L
-    I --> L
-    J --> L
-    K --> L
+    
+    C -->|planner| D1[tools.planner: Synthesizes entire travel plan]
+    C -->|budget| D2[tools.budget: Trip cost estimator]
+    C -->|packing| D3[tools.packing: Dynamic gear list generator]
+    C -->|weather| D4[tools.weather: Live Open-Meteo weather + warnings]
+    C -->|faq| D5[tools.faq: Quick answer matcher for FAQs]
+    C -->|hotel| D6[tools.hotel: Hotel, hostel, and resort recommendations]
+    C -->|restaurant| D7[tools.restaurant: Cafe & local dining advisor]
+    C -->|destination| D8[tools.destination: Tag-filtered spot recommender]
+    C -->|transport| D9[tools.transport: Route logistics advisor]
+    C -->|trek| D10[tools.trek: Difficulty & fort info summaries]
+    C -->|chat| D11[Normal Chat: Ollama / Conversational Fallback]
+    
+    D1 & D2 & D3 & D4 & D5 & D6 & D7 & D8 & D9 & D10 & D11 --> E[Output Formatting & Active Memory Update]
+    E --> F[Print/Show Response to User]
 ```
 
-### How It Works
+### Active Destination Context Flow (Trip Memory)
 
-1. `chat_agent.py` reads the user's message.
-2. `tool_router.choose_tool()` matches the message to a tool keyword.
-3. If a tool matches, the agent runs the corresponding function in `tools/`.
-4. If no tool matches, the message falls back to the normal chat prompt.
-5. The response is printed in the terminal and stored in `memory/chat_history.txt`.
+When a destination is detected, it is saved in a session state. Follow-up queries that do not contain a destination will automatically inherit this active context.
 
-### Trip Details Flow
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as Explorush Agent
+    participant Session as tools.conversation
+    
+    User->>Agent: "Plan a trip to Goa for 4 days"
+    Note over Agent: Extracts 'Goa'
+    Agent->>Session: set_active_destination("Goa")
+    Agent-->>User: Returns 4-Day Goa travel plan
+    
+    User->>Agent: "What hotels should I visit?"
+    Agent->>Session: get_active_destination()
+    Session-->>Agent: Returns "Goa"
+    Note over Agent: Fetches Goa hotels
+    Agent-->>User: Returns Goa hotel recommendations
+```
 
-The trip-details path uses two extractors:
+---
 
-- `tools.location_extractor.extract_location()` for the trek name
-- `tools.date_time_extractor.extract_date_time()` for date and time
-
-This produces a structured output like:
+## Folder Structure
 
 ```text
-TREK: Kalsubai
-DATE: Tomorrow
-TIME: Morning
+ai-trek-agent/
+│
+├── chat_agent.py          # Terminal CLI interactive interface
+├── ui.py                  # Streamlit web interactive interface
+├── test_db.py             # Offline parameter extraction testing tool
+├── requirements.txt       # Python package dependencies
+├── README.md              # Project documentation
+│
+├── data/
+│   └── treks.json         # Old trekking details DB (preserved)
+│
+├── memory/
+│   ├── chat_history.txt   # Conversational log
+│   └── session.json       # Session state (active destination context)
+│
+├── tools/                 # Modular travel tools
+│   ├── __init__.py
+│   ├── activities.py      # Adventure sports, camping, beaches
+│   ├── budget.py          # Budget estimator calculations
+│   ├── conversation.py    # Session and context memory manager
+│   ├── currency.py        # Forex cards and cash exchange advice
+│   ├── destination.py     # Budget/tag filtered recommendations
+│   ├── emergency.py       # Scams, safety advice, helplines
+│   ├── events.py          # Culture, seasonal local festivals
+│   ├── faq.py             # Answers to common travel FAQs
+│   ├── geocoder.py        # Geocoding search helper
+│   ├── hotel.py           # Hotel, hostel, and resort guides
+│   ├── itinerary.py       # General daily travel itineraries
+│   ├── location_extractor.py # Legacy location wrapper
+│   ├── nearby.py          # Sightseeing, photography spots, hidden gems
+│   ├── packing.py         # Monsoon/Beach/Winter/Camping packing lists
+│   ├── planner.py         # Main aggregator for full trip plans
+│   ├── restaurant.py      # Cafe, dining, and local street food guides
+│   ├── transport.py       # Flight, train, cab, road trip routes
+│   ├── trek.py            # Unified trekking summaries & difficulty
+│   ├── trip_details.py    # Regex & LLM parameter extractor
+│   ├── trip_type.py       # Solo, couple, family, group guidelines
+│   ├── visa.py            # Schengen, VoA, and outbound visa guidelines
+│   └── weather.py         # Weather-aware safety advisory
+│
+└── web/                   # Next.js web application
+    ├── package.json
+    ├── src/
+    │   ├── app/
+    │   │   ├── page.tsx   # Dashboard main page
+    │   │   └── api/chat/  # Chat API endpoint
+    │   ├── components/# Explorush custom console components
+    │   └── lib/
+    │       ├── agent.ts   # Next.js agent routing & fallbacks
+    │       └── treks.ts   # Next.js destinations mock database
+    └── tsconfig.json
 ```
 
-## Entry Points
+---
 
-### 1. `chat_agent.py`
-
-Interactive terminal agent with tool routing and short conversation memory.
-
-Use this when you want the full assistant experience.
-
-### 2. `ui.py`
-
-Streamlit web UI for a lightweight chat experience.
-
-Use this when you want a browser interface instead of the terminal.
-
-### 3. `app.py`
-
-Minimal Ollama smoke test that sends a single prompt to the model.
-
-Use this to confirm Ollama and the model are reachable.
-
-### 4. `test_db.py`
-
-Small loop for testing trip-detail extraction from a prompt.
-
-## Tool Routing
-
-The router in `tool_router.py` selects one of these tool labels:
-
-- `trip_details`
-- `planner`
-- `packing`
-- `difficulty`
-- `itinerary`
-- `weather`
-- `trek_info`
-- `chat`
-
-### Example Matches
-
-- `plan a trek`, `trek plan`, `plan my trek` -> `planner`
-- `packing list`, `what should i carry` -> `packing`
-- `difficulty`, `how difficult` -> `difficulty`
-- `itinerary`, `schedule` -> `itinerary`
-- `weather`, `forecast`, `temperature`, `rain` -> `weather`
-- `tell me about`, `details about`, `height`, `duration` -> `trek_info`
-- date/time words such as `today`, `tomorrow`, `morning`, `evening`, `night`, `this weekend`, `next weekend` -> `trip_details`
-
-## Tool Details
-
-### `tools/location_extractor.py`
-
-Extracts the trek or location name from user text with help from the LLM.
-
-### `tools/date_time_extractor.py`
-
-Deterministically extracts date and time keywords from user text.
-
-### `tools/trip_details.py`
-
-Combines trek extraction and date/time extraction into one structured response.
-
-### `tools/planner.py`
-
-Builds a full trek plan by combining:
-
-- dynamic trek info
-- weather
-- smart packing
-- itinerary
-- safety tips
-
-### Other tool modules
-
-- `tools/packing.py` -> packing lists
-- `tools/difficulty.py` -> trek difficulty
-- `tools/itinerary.py` -> basic itinerary generation
-- `tools/weather.py` -> weather information
-- `tools/trek_info.py` -> trek information summary
-- `tools/safety.py` -> safety tips
-- `tools/smart_packing.py` -> weather-aware packing
-- `tools/dynamic_trek_info.py` -> richer trek details
-- `tools/wiki_search.py` -> wiki-backed lookup helper
-- `tools/geocoder.py` -> location geocoding support
-
-## Setup
+## Installation & Setup
 
 ### Prerequisites
+- Python 3.10+
+- Node.js 18+ (for Web App)
+- Ollama (Optional, for dynamic LLM support)
 
-- Python 3.10 or newer
-- Ollama installed locally
-- The `phi3` model pulled into Ollama
+### Python Backend Setup
+1. Clone the project repository.
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv venv
+   .\venv\Scripts\activate  # On Windows PowerShell
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. If using Ollama, pull the required model:
+   ```bash
+   ollama pull phi3
+   ```
 
-### Install Dependencies
+### Running Python Interfaces
+- **Terminal CLI**:
+  ```bash
+  python chat_agent.py
+  ```
+- **Streamlit Web UI**:
+  ```bash
+  streamlit run ui.py
+  ```
 
-This repo does not currently include a dependency lock file, so install the main packages manually:
+### Running Next.js Web App
+1. Navigate to the web folder:
+   ```bash
+   cd web
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Run the Next.js dev server:
+   ```bash
+   npm run dev
+   ```
+4. Open `http://localhost:3000` in your browser.
 
-```bash
-pip install langchain-ollama streamlit
-```
+---
 
-If other tool modules require extra packages in your environment, install them as needed.
+## Example Queries & Routing
 
-### Ollama Model
+| Input | Selected Tool | Action |
+| :--- | :--- | :--- |
+| *"I'm going to Goa for 4 days"* | `planner` | Generates full summary, transport, stays, daily itinerary, budget, weather, and tips. |
+| *"Suggest weekend trips from Mumbai under 10000"* | `destination` | Suggests Lonavala, Alibaug, and Rajmachi matching tags and budget limit. |
+| *"Is Manali safe?"* | `faq` | Returns seasonal safety warning about monsoons and black ice. |
+| *"What restaurants should I visit?"* | `restaurant` | Uses active destination context to recommend cafes and local foods. |
+| *"How difficult is Harihar?"* | `trek` | Pulls difficulty rating (Hard) and fort elevation from the local database. |
 
-Make sure the `phi3` model is available:
 
-```bash
-ollama pull phi3
-```
+ .\venv\Scripts\activate   
+ streamlit run ui.py   
+cd web
+npm install
+npm run dev
 
-## How To Run
+---
 
-### 1. Run the main chat agent
-
-```bash
-python chat_agent.py
-```
-
-Type a trekking question and the router will decide which tool to use.
-
-### 2. Run the Streamlit UI
-
-```bash
-streamlit run ui.py
-```
-
-### 3. Run the simple model smoke test
-
-```bash
-python app.py
-```
-
-### 4. Test trip detail extraction
-
-```bash
-python test_db.py
-```
-
-## Example Inputs
-
-### Trip details
-
-```text
-Kalsubai tomorrow morning
-```
-
-Expected output:
-
-```text
-TREK: Kalsubai
-DATE: Tomorrow
-TIME: Morning
-```
-
-### Planner
-
-```text
-Plan a trek to Harishchandragad
-```
-
-### Packing
-
-```text
-What should I carry for a monsoon trek?
-```
-
-### Weather
-
-```text
-Weather at Ratangad
-```
-
-## Memory
-
-The main chat agent stores short conversation history in:
-
-```text
-memory/chat_history.txt
-```
-
-This helps the assistant keep limited context across turns.
-
-## Data Files
-
-- `data/treks.json` contains trek-related data used by the project.
-
-## Notes
-
-- The chat agent uses a bounded memory window so prompts do not grow forever.
-- Tool outputs are printed directly in the terminal.
-- The trip-details route is intentionally deterministic for date and time extraction.
-
-## Troubleshooting
-
-### `langchain_ollama` import error
-
-Make sure you installed dependencies in the same Python environment you use to run the project.
-
-### Ollama connection issues
-
-Check that the Ollama service is running and that `phi3` is installed.
-
-### Unexpected chat response instead of a tool
-
-The router is keyword-based. Rephrase the input using one of the known tool phrases.
-
-## Suggested Next Improvements
-
-- add a `requirements.txt`
-- expand the router with more natural language matches
-- add tests for each tool branch
-- surface trip details in the Streamlit UI
+## Future Scope
+- **Real-time APIs**: Integrate Skyscanner API for live flight prices and Booking.com API for real-time room availability.
+- **Auto-acclimatization Alerts**: Warn users automatically if they plan a trip above 10,000 ft without rest days.
+- **Interactive Map Visuals**: Embed Google Maps or Leaflet inside the Next.js and Streamlit interfaces showing the daily itinerary route points.
