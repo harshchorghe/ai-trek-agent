@@ -14,7 +14,7 @@ const initialMessage: ConversationItem = {
   id: "welcome",
   role: "assistant",
   content:
-    "Welcome to Explorush AI Travel Assistant! 🎒\n\nI am your experienced travel consultant. Ask me anything about trip planning, budget estimates, packing guides, hotels, dining, or trekking adventures.",
+    "Welcome to Explorush AI Travel Assistant! \n\nI am your experienced travel consultant. Ask me anything about trip planning, budget estimates, packing guides, hotels, dining, or trekking adventures.",
 };
 
 // Custom Helper to extract sections from plan content
@@ -24,12 +24,12 @@ function extractSection(content: string, headingKeywords: string[]): string | nu
   const sectionLines: string[] = [];
 
   for (const line of lines) {
-    const isHeading = 
-      line.trim().startsWith("#") || 
-      line.includes("======") || 
-      line.includes("------") || 
+    const isHeading =
+      line.trim().startsWith("#") ||
+      line.includes("======") ||
+      line.includes("------") ||
       (line.toUpperCase() === line && line.trim().length > 3 && !line.includes("-") && !line.includes("|"));
-    
+
     if (isHeading) {
       const match = headingKeywords.some(keyword => line.toLowerCase().includes(keyword.toLowerCase()));
       if (match) {
@@ -56,7 +56,7 @@ export function ChatConsole() {
   const [isSending, setIsSending] = useState(false);
   const [conversation, setConversation] = useState<ConversationItem[]>([initialMessage]);
   const [activeTab, setActiveTab] = useState<"itinerary" | "budget" | "stays" | "packing" | "weather">("itinerary");
-  
+
   // Selected assistant response for the showcase panel
   const [selectedPlanIndex, setSelectedPlanIndex] = useState<number>(-1);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -141,10 +141,10 @@ export function ChatConsole() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-stretch">
-      
+
       {/* Left Panel: Chat Console (5 Cols) */}
       <div className="lg:col-span-5 flex flex-col h-[620px] bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-950/40">
           <div className="flex items-center gap-2.5">
@@ -165,9 +165,8 @@ export function ChatConsole() {
           {conversation.map((item, idx) => (
             <div
               key={item.id}
-              className={`flex flex-col max-w-[90%] ${
-                item.role === "user" ? "self-end items-end" : "self-start items-start"
-              }`}
+              className={`flex flex-col max-w-[90%] ${item.role === "user" ? "self-end items-end" : "self-start items-start"
+                }`}
             >
               <span className="text-[9px] text-slate-500 mb-1 flex items-center gap-1 uppercase tracking-wider font-semibold">
                 {item.role === "user" ? (
@@ -188,15 +187,13 @@ export function ChatConsole() {
                 type="button"
                 disabled={item.role !== "assistant" || idx === 0}
                 onClick={() => setSelectedPlanIndex(idx)}
-                className={`text-left transition-all duration-200 rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed border ${
-                  item.role === "user"
+                className={`text-left transition-all duration-200 rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed border ${item.role === "user"
                     ? "bg-emerald-600 text-white rounded-tr-none border-emerald-500 shadow-md"
-                    : `rounded-tl-none border-slate-800 shadow-md ${
-                        selectedPlanIndex === idx
-                          ? "bg-slate-800 border-emerald-500/50 shadow-emerald-950/20 shadow-md"
-                          : "bg-slate-900/80 hover:bg-slate-850"
-                      }`
-                }`}
+                    : `rounded-tl-none border-slate-800 shadow-md ${selectedPlanIndex === idx
+                      ? "bg-slate-800 border-emerald-500/50 shadow-emerald-950/20 shadow-md"
+                      : "bg-slate-900/80 hover:bg-slate-850"
+                    }`
+                  }`}
               >
                 {item.role === "assistant" && (item.content.includes("EXPLORUSH TRAVEL PLAN") || item.content.includes("Day 1:")) ? (
                   <div>
@@ -273,7 +270,7 @@ export function ChatConsole() {
 
       {/* Right Panel: Showcase Panel (7 Cols) */}
       <div className="lg:col-span-7 flex flex-col h-[620px] bg-slate-900/35 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
-        
+
         {/* Showcase Header */}
         <div className="px-5 py-4 border-b border-slate-800 bg-slate-950/30 flex items-center justify-between">
           <div>
@@ -281,7 +278,7 @@ export function ChatConsole() {
               🧭 Explorush Travel Plan Showcase
             </h2>
             <p className="text-[10px] text-slate-400">
-              {selectedMessage && selectedMessage.meta?.trekName 
+              {selectedMessage && selectedMessage.meta?.trekName
                 ? `Structured proposal details for: ${selectedMessage.meta.trekName}`
                 : "Enter a planning request on the left to generate details"}
             </p>
@@ -294,24 +291,23 @@ export function ChatConsole() {
             {/* Tabs */}
             <div className="flex border-b border-slate-800 bg-slate-950/15 overflow-x-auto">
               {[
-                { id: "itinerary", label: "🗺️ Itinerary", enabled: !!itineraryContent },
-                { id: "budget", label: "💰 Budget Plan", enabled: !!budgetContent },
-                { id: "stays", label: "🏨 Stays & Food", enabled: !!staysContent },
-                { id: "packing", label: "🎒 Packing List", enabled: !!packingContent },
-                { id: "weather", label: "🌤️ Weather & Safety", enabled: !!weatherContent },
+                { id: "itinerary", label: "Itinerary", enabled: !!itineraryContent },
+                { id: "budget", label: "Budget Plan", enabled: !!budgetContent },
+                { id: "stays", label: "Stays & Food", enabled: !!staysContent },
+                { id: "packing", label: "Packing List", enabled: !!packingContent },
+                { id: "weather", label: "Weather & Safety", enabled: !!weatherContent },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   disabled={!tab.enabled}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex-1 py-3 text-center text-[11px] font-semibold tracking-wide border-b-2 whitespace-nowrap px-4 transition-all duration-200 ${
-                    !tab.enabled 
-                      ? "opacity-25 cursor-not-allowed border-transparent text-slate-600" 
+                  className={`flex-1 py-3 text-center text-[11px] font-semibold tracking-wide border-b-2 whitespace-nowrap px-4 transition-all duration-200 ${!tab.enabled
+                      ? "opacity-25 cursor-not-allowed border-transparent text-slate-600"
                       : activeTab === tab.id
-                      ? "border-emerald-500 text-emerald-400 bg-slate-800/20"
-                      : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/30"
-                  }`}
+                        ? "border-emerald-500 text-emerald-400 bg-slate-800/20"
+                        : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/30"
+                    }`}
                 >
                   {tab.label}
                 </button>
