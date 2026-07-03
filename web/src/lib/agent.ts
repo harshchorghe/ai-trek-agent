@@ -165,7 +165,10 @@ async function saveSectionToMongo(
   try {
     const { db } = await connectToDatabase();
     
-    await db.collection("destinations").updateOne(
+    const redactedUri = uri.replace(/\/\/[^@]+@/, "//***:***@");
+    console.log(`🔌 MongoDB KB Save Check: Connecting to ${redactedUri} | Database: ${db.databaseName} | Collection: destinations`);
+    
+    const result = await db.collection("destinations").updateOne(
       { normalizedDestination: destNorm },
       {
         $set: {
@@ -176,19 +179,21 @@ async function saveSectionToMongo(
           [`sections.${category}`]: sectionDoc
         },
         $setOnInsert: {
-          createdAt: currentTime,
-          totalHits: 0
+          createdAt: currentTime
+        },
+        $inc: {
+          totalHits: 1
         }
       },
       { upsert: true }
     );
     
-    await db.collection("destinations").updateOne(
-      { normalizedDestination: destNorm },
-      { $inc: { totalHits: 1 } }
+    console.log(
+      `💾 Next.js KB Save: Saved ${category} for ${destNorm}. ` +
+      `Result: acknowledged=${result.acknowledged}, matchedCount=${result.matchedCount}, ` +
+      `modifiedCount=${result.modifiedCount}, upsertedCount=${result.upsertedCount || 0}, ` +
+      `upsertedId=${result.upsertedId ? result.upsertedId.toString() : "null"}`
     );
-    
-    console.log(`💾 Next.js KB Save: Saved ${category} for ${destNorm}`);
   } catch (e) {
     console.error("Next.js: MongoDB KB save failed", e);
   }
