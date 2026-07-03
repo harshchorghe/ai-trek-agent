@@ -28,6 +28,14 @@ export type ToolName =
   | "activities"
   | "faq";
 
+export type CoordinateItem = {
+  name: string;
+  lat: number;
+  lng: number;
+  description: string;
+  day: number;
+};
+
 export type AgentResponse = {
   reply: string;
   tool: ToolName;
@@ -35,6 +43,7 @@ export type AgentResponse = {
   source: "local" | "ollama";
   facts: Array<{ label: string; value: string }>;
   suggestions: string[];
+  coordinates?: CoordinateItem[];
 };
 
 // Read env vars dynamically in functions
@@ -81,10 +90,123 @@ async function connectToDatabase() {
   return { client, db };
 }
 
+function getLocalFallbackCoordinates(destination: string): CoordinateItem[] {
+  const norm = destination.trim().toLowerCase();
+  
+  if (norm.includes("goa")) {
+    return [
+      { name: "Panaji (Capital)", lat: 15.4909, lng: 73.8278, description: "Historical Latin quarter walk", day: 1 },
+      { name: "Calangute Beach", lat: 15.5441, lng: 73.7624, description: "Water sports and sunbathing", day: 2 },
+      { name: "Baga Beach & Clubs", lat: 15.5562, lng: 73.7517, description: "Evening beach dining and nightlife", day: 3 },
+      { name: "Dudhsagar Falls", lat: 15.3179, lng: 74.3142, description: "Scenic jungle trek and waterfall dip", day: 4 }
+    ];
+  }
+  if (norm.includes("kashmir")) {
+    return [
+      { name: "Srinagar (Dal Lake)", lat: 34.0837, lng: 74.7973, description: "Shikara boat ride & houseboat stay", day: 1 },
+      { name: "Gulmarg Meadows", lat: 34.0484, lng: 74.3805, description: "Gondola cable car ride to Apharwat", day: 2 },
+      { name: "Pahalgam Valley", lat: 34.0161, lng: 75.3150, description: "Betaab Valley walks and horse rides", day: 3 }
+    ];
+  }
+  if (norm.includes("manali")) {
+    return [
+      { name: "Mall Road & Old Manali", lat: 32.2396, lng: 77.1887, description: "Local shopping and cafe hopping", day: 1 },
+      { name: "Solang Valley Adventure", lat: 32.3164, lng: 77.1582, description: "Paragliding and mountain views", day: 2 },
+      { name: "Hadimba Temple", lat: 32.2476, lng: 77.1704, description: "Ancient wooden temple in pine woods", day: 3 }
+    ];
+  }
+  if (norm.includes("jaipur")) {
+    return [
+      { name: "Hawa Mahal", lat: 26.9239, lng: 75.8267, description: "Iconic Palace of Winds photography", day: 1 },
+      { name: "City Palace", lat: 26.9258, lng: 75.8237, description: "Royal museum and courtyards visit", day: 2 },
+      { name: "Amer Fort", lat: 26.9855, lng: 75.8513, description: "Magnificent hilltop fort exploration", day: 3 }
+    ];
+  }
+  if (norm.includes("ladakh")) {
+    return [
+      { name: "Leh Market & Palace", lat: 34.1526, lng: 77.5771, description: "Acclimatization day and local walks", day: 1 },
+      { name: "Khardung La Pass", lat: 34.2787, lng: 77.6047, description: "Drive through one of the highest roads", day: 2 },
+      { name: "Pangong Tso Lake", lat: 33.7595, lng: 78.6674, description: "Breathtaking blue high-altitude lake", day: 3 }
+    ];
+  }
+  
+  return [
+    { name: destination, lat: 20.5937, lng: 78.9629, description: "Central landmark of destination", day: 1 }
+  ];
+}
+
+async function extractCoordinatesForDestination(
+  destination: string
+): Promise<CoordinateItem[]> {
+  const fallbackCoords = getLocalFallbackCoordinates(destination);
+  
+  const key = process.env.GROQ_API_KEY;
+  if (!key) {
+    return fallbackCoords;
+  }
+
+  const prompt = `You are a travel geocoder. The user is planning a trip to "${destination}".
+Identify 3-5 key geographical points, attractions, or locations that a traveler would typically visit in this destination.
+For each key point, determine its realistic latitude and longitude coordinates.
+Output ONLY a raw, valid JSON array of objects with the exact structure below, containing no markdown framing, formatting, or explanation:
+[
+  {
+    "name": "Name of the place/attraction",
+    "lat": latitude_number,
+    "lng": longitude_number,
+    "description": "Brief description of the activity/sight",
+    "day": day_number
+  }
+]
+`;
+
+  try {
+    const rawReply = await askGroq([{ role: "user", content: prompt }], "llama-3.1-8b-instant");
+    if (!rawReply) return fallbackCoords;
+
+    let cleanJson = rawReply.trim();
+    if (cleanJson.includes("```")) {
+      const match = cleanJson.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (match) {
+        cleanJson = match[1].trim();
+      }
+    }
+
+    const items = JSON.parse(cleanJson);
+    if (Array.isArray(items) && items.length > 0) {
+      const validated: CoordinateItem[] = [];
+      for (const item of items) {
+        if (
+          typeof item.name === "string" &&
+          typeof item.lat === "number" &&
+          typeof item.lng === "number" &&
+          typeof item.description === "string" &&
+          typeof item.day === "number"
+        ) {
+          validated.push({
+            name: item.name,
+            lat: item.lat,
+            lng: item.lng,
+            description: item.description,
+            day: item.day,
+          });
+        }
+      }
+      if (validated.length > 0) {
+        return validated.sort((a, b) => a.day - b.day);
+      }
+    }
+  } catch (e) {
+    console.error("Next.js: Geocoding extraction failed", e);
+  }
+
+  return fallbackCoords;
+}
+
 async function getCachedSectionFromMongo(
   category: string,
   destination: string
-): Promise<string | null> {
+): Promise<{ response: string | null; coordinates?: CoordinateItem[] } | null> {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
   
@@ -127,7 +249,17 @@ async function getCachedSectionFromMongo(
       ).catch(() => {});
       
       console.log(`🎯 Next.js KB Hit: ${category} for ${destNorm}`);
-      return section.response || null;
+      
+      let coordinates = doc.coordinates;
+      if (!coordinates && category === "planner_3d_1p_mid-range") {
+        coordinates = await extractCoordinatesForDestination(destination);
+        db.collection("destinations").updateOne(
+          { normalizedDestination: destNorm },
+          { $set: { coordinates } }
+        ).catch(() => {});
+      }
+      
+      return { response: section.response || null, coordinates };
     }
     return null;
   } catch (e) {
@@ -140,6 +272,7 @@ async function saveSectionToMongo(
   category: string,
   destination: string,
   value: string,
+  coordinates?: CoordinateItem[],
   source: string = "groq"
 ): Promise<void> {
   const uri = process.env.MONGODB_URI;
@@ -168,16 +301,22 @@ async function saveSectionToMongo(
     const redactedUri = uri.replace(/\/\/[^@]+@/, "//***:***@");
     console.log(`🔌 MongoDB KB Save Check: Connecting to ${redactedUri} | Database: ${db.databaseName} | Collection: destinations`);
     
+    const updateDoc: any = {
+      destination: destination.trim(),
+      normalizedDestination: destNorm,
+      lastUpdated: currentTime,
+      lastAccessed: currentTime,
+      [`sections.${category}`]: sectionDoc
+    };
+    
+    if (coordinates && coordinates.length > 0) {
+      updateDoc.coordinates = coordinates;
+    }
+    
     const result = await db.collection("destinations").updateOne(
       { normalizedDestination: destNorm },
       {
-        $set: {
-          destination: destination.trim(),
-          normalizedDestination: destNorm,
-          lastUpdated: currentTime,
-          lastAccessed: currentTime,
-          [`sections.${category}`]: sectionDoc
-        },
+        $set: updateDoc,
         $setOnInsert: {
           createdAt: currentTime
         },
@@ -601,7 +740,10 @@ function buildLocalReply(
   return input;
 }
 
-async function askGroq(messages: ChatMessage[]): Promise<string | null> {
+async function askGroq(
+  messages: ChatMessage[],
+  model: string = "llama-3.3-70b-versatile"
+): Promise<string | null> {
   const key = process.env.GROQ_API_KEY;
   if (!key) return null;
   
@@ -620,7 +762,7 @@ async function askGroq(messages: ChatMessage[]): Promise<string | null> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model,
         messages: [
           {
             role: "system",
@@ -736,19 +878,20 @@ export async function buildAgentResponse(messages: ChatMessage[]): Promise<Agent
     }
 
     const isRefreshRequested = /refresh|update|reload/i.test(lastUserMessage.content);
-    let cachedItem = null;
+    let cachedItem: { response: string | null; coordinates?: CoordinateItem[] } | null = null;
     if (!isRefreshRequested) {
       cachedItem = await getCachedSectionFromMongo(category, destName);
     }
     
-    if (cachedItem) {
+    if (cachedItem && cachedItem.response) {
       return {
-        reply: cachedItem,
+        reply: cachedItem.response,
         tool,
         trekName: activeMatch?.name ?? extractedName,
         source: "local",
         facts: factsForMatch(activeMatch),
         suggestions: quickReplies(tool, activeMatch, destName),
+        coordinates: cachedItem.coordinates,
       };
     }
 
@@ -788,10 +931,23 @@ Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakd
         prompt = `Provide a detailed, practical, and helpful travel guide section about "${tool}" for a visitor going to ${destName}. Keep it concise.`;
       }
 
-      const groqReply = await askGroq([{ role: "user", content: prompt }]);
+      let groqReply: string | null = null;
+      let coordinates: CoordinateItem[] = [];
+
+      if (category === "planner_3d_1p_mid-range") {
+        const [replyResult, coordsResult] = await Promise.all([
+          askGroq([{ role: "user", content: prompt }]),
+          extractCoordinatesForDestination(destName)
+        ]);
+        groqReply = replyResult;
+        coordinates = coordsResult;
+      } else {
+        groqReply = await askGroq([{ role: "user", content: prompt }]);
+      }
+
       if (groqReply) {
         // Save the generated response to MongoDB Atlas
-        await saveSectionToMongo(category, destName, groqReply);
+        await saveSectionToMongo(category, destName, groqReply, coordinates);
         return {
           reply: groqReply,
           tool,
@@ -799,6 +955,7 @@ Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakd
           source: "ollama", // "ollama" acts as model-source flag
           facts: factsForMatch(activeMatch),
           suggestions: quickReplies(tool, activeMatch, destName),
+          coordinates: category === "planner_3d_1p_mid-range" ? coordinates : undefined,
         };
       }
     }
@@ -831,12 +988,14 @@ Use standard headers like '### Daily Itinerary' and '### Estimated Budget Breakd
     };
   }
 
+  const localReply = buildLocalReply(tool, name || "Goa", lastUserMessage.content);
   return {
-    reply: buildLocalReply(tool, name || "Goa", lastUserMessage.content),
+    reply: localReply,
     tool,
     trekName: activeMatch?.name ?? extractedName,
     source: "local",
     facts: factsForMatch(activeMatch),
     suggestions: quickReplies(tool, activeMatch, name),
+    coordinates: tool === "planner" ? getLocalFallbackCoordinates(name || "Goa") : undefined,
   };
 }

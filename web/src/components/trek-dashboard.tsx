@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { AgentResponse, ChatMessage } from "@/lib/agent";
 import { QUICK_PROMPTS } from "@/lib/treks";
 import { Markdown } from "./markdown";
+import dynamic from "next/dynamic";
+
+const MapView = dynamic(() => import("./map-view"), {
+  ssr: false,
+});
 
 type ConversationItem = ChatMessage & {
   id: string;
@@ -55,7 +60,7 @@ export function ChatConsole() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [conversation, setConversation] = useState<ConversationItem[]>([initialMessage]);
-  const [activeTab, setActiveTab] = useState<"itinerary" | "budget" | "stays" | "packing" | "weather">("itinerary");
+  const [activeTab, setActiveTab] = useState<"itinerary" | "budget" | "stays" | "packing" | "weather" | "map">("itinerary");
 
   // Selected assistant response for the showcase panel
   const [selectedPlanIndex, setSelectedPlanIndex] = useState<number>(-1);
@@ -72,6 +77,12 @@ export function ChatConsole() {
       const content = conversation[lastIdx].content;
       if (content.includes("EXPLORUSH TRAVEL PLAN") || content.includes("Itinerary") || content.includes("Budget") || content.includes("Packing")) {
         setSelectedPlanIndex(lastIdx);
+        const coords = conversation[lastIdx].meta?.coordinates || [];
+        if (coords.length > 0) {
+          setActiveTab("map");
+        } else {
+          setActiveTab("itinerary");
+        }
       }
     }
   }, [conversation]);
@@ -136,8 +147,16 @@ export function ChatConsole() {
   const packingContent = extractSection(rawContent, ["packing", "packing list"]);
   const weatherContent = extractSection(rawContent, ["weather", "forecast", "safety & emergency", "safety", "emergency", "general travel tips"]);
 
+  const coordinates = selectedMessage?.meta?.coordinates || [];
+
   // Show details panel only if there's any valid plan content extracted
-  const hasShowcaseData = itineraryContent || budgetContent || staysContent || packingContent || weatherContent;
+  const hasShowcaseData =
+    itineraryContent ||
+    budgetContent ||
+    staysContent ||
+    packingContent ||
+    weatherContent ||
+    coordinates.length > 0;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-stretch">
@@ -292,6 +311,7 @@ export function ChatConsole() {
             <div className="flex border-b border-slate-800 bg-slate-950/15 overflow-x-auto">
               {[
                 { id: "itinerary", label: "Itinerary", enabled: !!itineraryContent },
+                { id: "map", label: "Interactive Map", enabled: coordinates.length > 0 },
                 { id: "budget", label: "Budget Plan", enabled: !!budgetContent },
                 { id: "stays", label: "Stays & Food", enabled: !!staysContent },
                 { id: "packing", label: "Packing List", enabled: !!packingContent },
@@ -339,6 +359,11 @@ export function ChatConsole() {
               {activeTab === "weather" && weatherContent && (
                 <div className="animate-fadeIn">
                   <Markdown content={weatherContent} />
+                </div>
+              )}
+              {activeTab === "map" && coordinates.length > 0 && (
+                <div className="animate-fadeIn">
+                  <MapView coordinates={coordinates} />
                 </div>
               )}
             </div>
